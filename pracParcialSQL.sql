@@ -1062,3 +1062,127 @@ GROUP BY p1.prod_codigo, p1.prod_detalle,
          r.rubr_id, e.enva_codigo
 HAVING COUNT(DISTINCT f.fact_tipo + f.fact_sucursal + f.fact_numero) > 50
 ORDER BY Nombre_Prod1 ASC
+
+/* Parcial Practico de Gestion de Datos - 28/07/2023
+1. Realizar una consulta SQL que devuelva todos los clientes que durante 2 años consecutivos 
+compraron al menos 5 productos distintos. De esos clientes mostrar:
+● El código de cliente
+● El monto total comprado en el 2012
+● La cantidad de unidades de productos compradas en el 2012
+El resultado debe ser ordenado primero por aquellos clientes que compraron 
+solo productos compuestos en algún momento,luego el resto.*/
+SELECT 
+    c.clie_codigo AS Cod_Cliente,
+    ISNULL(
+       (SELECT SUM(f12.fact_total)
+        FROM Factura f12
+        WHERE f12.fact_cliente = c.clie_codigo AND YEAR(f12.fact_fecha) = 2012 )
+        , 0) AS Monto_Total_2012,
+    ISNULL(
+       (SELECT SUM(i12.item_cantidad)
+        FROM Factura f12
+        JOIN Item_Factura i12 ON f12.fact_tipo = i12.item_tipo AND f12.fact_sucursal = i12.item_sucursal AND f12.fact_numero = i12.item_numero
+        WHERE f12.fact_cliente = c.clie_codigo AND YEAR(f12.fact_fecha) = 2012 )
+        , 0) AS Cant_Unidades_2012
+FROM Cliente c
+WHERE EXISTS (
+    SELECT 1
+    FROM Factura fb
+    WHERE fb.fact_cliente = c.clie_codigo
+      AND (SELECT COUNT(DISTINCT i1.item_producto)
+            FROM Factura f1
+            JOIN Item_Factura i1 ON f1.fact_tipo = i1.item_tipo AND f1.fact_sucursal = i1.item_sucursal AND f1.fact_numero = i1.item_numero
+            WHERE f1.fact_cliente = c.clie_codigo AND YEAR(f1.fact_fecha) = YEAR(fb.fact_fecha)
+      ) >= 5
+      AND (SELECT COUNT(DISTINCT i2.item_producto)
+            FROM Factura f2
+            JOIN Item_Factura i2 ON f2.fact_tipo = i2.item_tipo AND f2.fact_sucursal = i2.item_sucursal AND f2.fact_numero = i2.item_numero
+            WHERE f2.fact_cliente = c.clie_codigo
+              AND YEAR(f2.fact_fecha) = YEAR(fb.fact_fecha) + 1
+      ) >= 5
+    )
+ORDER BY
+    CASE
+        WHEN EXISTS (
+            SELECT 1
+            FROM Factura fc
+            WHERE fc.fact_cliente = c.clie_codigo
+              AND EXISTS ( -- Este EXISTS es solo para asegurarse que no haya facturas SIN items
+                    SELECT 1
+                    FROM Item_Factura ic
+                    WHERE ic.item_tipo = fc.fact_tipo AND ic.item_sucursal = fc.fact_sucursal AND ic.item_numero = fc.fact_numero
+              ) AND NOT EXISTS (
+                    SELECT 1
+                    FROM Item_Factura ic2
+                    WHERE ic2.item_tipo = fc.fact_tipo AND ic2.item_sucursal = fc.fact_sucursal AND ic2.item_numero = fc.fact_numero
+                      AND ic2.item_producto NOT IN (
+                            SELECT comp_producto
+                            FROM Composicion )
+              )
+        ) THEN 0 ELSE 1
+    END, c.clie_codigo
+
+-- Version empezando por Factura
+SELECT
+    f.fact_cliente AS Cod_Cliente,
+    ISNULL((
+        SELECT SUM(f12.fact_total)
+        FROM Factura f12
+        WHERE f12.fact_cliente = f.fact_cliente
+          AND YEAR(f12.fact_fecha) = 2012
+    ), 0) AS Monto_Total_2012,
+    ISNULL((
+        SELECT SUM(i12.item_cantidad)
+        FROM Factura f12
+        JOIN Item_Factura i12
+            ON f12.fact_tipo = i12.item_tipo
+           AND f12.fact_sucursal = i12.item_sucursal
+           AND f12.fact_numero = i12.item_numero
+        WHERE f12.fact_cliente = f.fact_cliente
+          AND YEAR(f12.fact_fecha) = 2012
+    ), 0) AS Cant_Unid_Prod_2012
+FROM Factura f
+GROUP BY f.fact_cliente
+HAVING EXISTS (
+    SELECT 1
+    FROM Factura fb
+    WHERE fb.fact_cliente = f.fact_cliente
+      AND (SELECT COUNT(DISTINCT i1.item_producto)
+            FROM Factura f1
+            JOIN Item_Factura i1
+                ON f1.fact_tipo = i1.item_tipo
+               AND f1.fact_sucursal = i1.item_sucursal
+               AND f1.fact_numero = i1.item_numero
+            WHERE f1.fact_cliente = f.fact_cliente
+              AND YEAR(f1.fact_fecha) = YEAR(fb.fact_fecha)
+      ) >= 5
+      AND (SELECT COUNT(DISTINCT i2.item_producto)
+            FROM Factura f2
+            JOIN Item_Factura i2
+                ON f2.fact_tipo = i2.item_tipo
+               AND f2.fact_sucursal = i2.item_sucursal
+               AND f2.fact_numero = i2.item_numero
+            WHERE f2.fact_cliente = f.fact_cliente
+              AND YEAR(f2.fact_fecha) = YEAR(fb.fact_fecha) + 1
+      ) >= 5
+)
+ORDER BY
+    CASE 
+        WHEN EXISTS (
+            SELECT 1
+            FROM Factura fx
+            WHERE fx.fact_cliente = f.fact_cliente
+              AND EXISTS (
+                    SELECT 1
+                    FROM Item_Factura ix
+                    WHERE ix.item_tipo = fx.fact_tipo AND ix.item_sucursal = fx.fact_sucursal AND ix.item_numero = fx.fact_numero
+              ) AND NOT EXISTS (
+                    SELECT 1
+                    FROM Item_Factura ix2
+                    WHERE ix2.item_tipo = fx.fact_tipo AND ix2.item_sucursal = fx.fact_sucursal AND ix2.item_numero = fx.fact_numero
+                      AND ix2.item_producto NOT IN (
+                            SELECT comp_producto
+                            FROM Composicion )
+              )
+        ) THEN 0 ELSE 1
+    END, f.fact_cliente
