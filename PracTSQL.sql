@@ -1544,3 +1544,138 @@ BEGIN TRANSACTION
 
 COMMIT TRANSACTION
 GO
+
+/* Parcial 01/07/2026 — SQL
+Enunciado
+
+Realizar una consulta SQL que devuelva los pares de productos vendidos juntos en una misma factura durante el año 2011, que sean del mismo rubro y mismo envase, y que hayan sido vendidos juntos más de 50 veces.
+
+Mostrar:
+
+Nro de fila
+Nombre del producto 1
+Nombre del producto 2
+Código de rubro
+Código de envase
+Porcentaje de unidades vendidas en 2011 que representa ese par
+
+Los productos del par deben mostrarse ordenados alfabéticamente.
+*/
+
+SELECT
+    ROW_NUMBER() OVER(ORDER BY p1.prod_detalle ASC) AS Nro_Fila,
+
+    p1.prod_detalle AS Nombre_Prod1,
+    p2.prod_detalle AS Nombre_Prod2,
+
+    r.rubr_id AS Cod_Rubro,
+    e.enva_codigo AS Cod_Envase,
+
+    ISNULL(CAST(
+        SUM(i1.item_cantidad + i2.item_cantidad) * 100.0 /
+        (
+            SELECT SUM(i3.item_cantidad)
+            FROM Factura f3
+            JOIN Item_Factura i3
+                ON i3.item_tipo = f3.fact_tipo
+               AND i3.item_sucursal = f3.fact_sucursal
+               AND i3.item_numero = f3.fact_numero
+            WHERE YEAR(f3.fact_fecha) = 2011
+        )
+        AS DECIMAL(12,2)
+    ), 0) AS Porcentaje_Unidades_2011
+
+FROM Factura f
+JOIN Item_Factura i1
+    ON f.fact_tipo = i1.item_tipo
+   AND f.fact_sucursal = i1.item_sucursal
+   AND f.fact_numero = i1.item_numero
+
+JOIN Producto p1
+    ON i1.item_producto = p1.prod_codigo
+
+JOIN Item_Factura i2
+    ON f.fact_tipo = i2.item_tipo
+   AND f.fact_sucursal = i2.item_sucursal
+   AND f.fact_numero = i2.item_numero
+
+JOIN Producto p2
+    ON i2.item_producto = p2.prod_codigo
+
+JOIN Rubro r
+    ON p1.prod_rubro = r.rubr_id
+   AND p2.prod_rubro = r.rubr_id
+
+JOIN Envases e
+    ON p1.prod_envase = e.enva_codigo
+   AND p2.prod_envase = e.enva_codigo
+
+WHERE YEAR(f.fact_fecha) = 2011
+  AND p1.prod_detalle < p2.prod_detalle
+
+GROUP BY
+    p1.prod_codigo,
+    p1.prod_detalle,
+    p2.prod_codigo,
+    p2.prod_detalle,
+    r.rubr_id,
+    e.enva_codigo
+
+HAVING COUNT(DISTINCT f.fact_tipo + '-' + f.fact_sucursal + '-' + f.fact_numero) > 50
+
+ORDER BY
+    Nombre_Prod1 ASC;
+
+/* Parcial 08/07/2026 — SQL
+Enunciado
+
+Realizar una consulta SQL que devuelva, para cada cliente:
+
+a. Razón social
+b. Período AAAAMM en que realizó mayor cantidad de compras
+c. Cantidad de productos distintos adquiridos
+d. Importe total facturado
+
+Ordenar de forma descendente por la cantidad de facturas emitidas para cada cliente.
+*/
+
+SELECT
+    c.clie_razon_social AS Razon_Social,
+
+    ISNULL((
+        SELECT TOP 1
+            CAST(YEAR(fp.fact_fecha) AS CHAR(4)) +
+            RIGHT('0' + CAST(MONTH(fp.fact_fecha) AS VARCHAR(2)), 2)
+        FROM Factura fp
+        WHERE fp.fact_cliente = c.clie_codigo
+        GROUP BY 
+            YEAR(fp.fact_fecha),
+            MONTH(fp.fact_fecha)
+        ORDER BY
+            COUNT(DISTINCT fp.fact_tipo + '-' + fp.fact_sucursal + '-' + fp.fact_numero) DESC,
+            YEAR(fp.fact_fecha),
+            MONTH(fp.fact_fecha)
+    ), '000000') AS Periodo,
+
+    ISNULL((
+        SELECT COUNT(DISTINCT i2.item_producto)
+        FROM Factura f2
+        JOIN Item_Factura i2
+            ON i2.item_tipo = f2.fact_tipo
+           AND i2.item_sucursal = f2.fact_sucursal
+           AND i2.item_numero = f2.fact_numero
+        WHERE f2.fact_cliente = c.clie_codigo
+    ), 0) AS Cantidad_Productos_Distintos,
+
+    SUM(f.fact_total) AS Importe_Total
+
+FROM Cliente c
+JOIN Factura f
+    ON c.clie_codigo = f.fact_cliente
+
+GROUP BY
+    c.clie_codigo,
+    c.clie_razon_social
+
+ORDER BY
+    COUNT(DISTINCT f.fact_tipo + '-' + f.fact_sucursal + '-' + f.fact_numero) DESC;
