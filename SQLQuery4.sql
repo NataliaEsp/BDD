@@ -877,3 +877,29 @@ PRODUCTO RIGHT JOIN ITEM_FACTURA  ON  ID = ITEM_FACTURA.ID_PRODUCTO
      2.   PROD2  NULL.  NULL.      NULL
      NULL NULL   3.     NULL.      100
      */
+/* Parcial 2022
+Realizar una consulta SQL que retorne, para cada producto con más
+de 2 artículos distintos en su composición la siguiente información:
+- Detalle del producto
+- Rubro del producto
+- Cantidad de veces que fue vendido 
+
+El resultado deberá mostrar ordenado por la cantidad de los productos
+que lo componen */
+ -- corregido con nota 10:
+ select
+  p.prod_detalle,
+  r.rubr_detalle,
+  (select count(*) 
+  from item_factura 
+  where item_producto = p.prod_codigo) AS cantidad_ventas
+from producto p
+join rubro r on p.prod_rubro = r.rubr_id
+where p.prod_codigo in (select c.comp_producto 
+						from composicion c 
+						group by c.comp_producto 
+						having count(comp_componente) >= 2) -- cambiar por >= para que me muestre algo
+order by (select sum(comp_cantidad) 
+		  from composicion 
+		  where comp_producto = p.prod_codigo) desc -- cantidad de componentes, en su cantidad correspondiente
+go
