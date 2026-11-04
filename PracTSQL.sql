@@ -278,7 +278,7 @@ GO
 -------------
 -- TRIGGER --
 -------------
-ALTER TRIGGER TR_I_FACTURA ON FACTURA 
+CREATE TRIGGER TR_I_FACTURA ON FACTURA 
 AFTER INSERT , DELETE
 AS
 BEGIN TRANSACTION 
@@ -520,7 +520,79 @@ END
 -- lista todos los prod_detalle existentes actualmente
 -- SELECT P0.prod_detalle FROM Producto P0
 
+-- V3 para el Trigger
+CREATE OR ALTER TRIGGER TR_UNIQUE_PROD_DETALLE
+ON Producto
+INSTEAD OF INSERT, UPDATE
+AS
+BEGIN
 
+    -- INSERT
+    IF NOT EXISTS (SELECT 1 FROM deleted)
+    BEGIN
+        IF EXISTS (
+            SELECT 1
+            FROM inserted i
+            JOIN Producto p
+                ON p.prod_detalle = i.prod_detalle
+        )
+        BEGIN
+            RAISERROR('Ya existe un producto con ese detalle.', 16, 1);
+            RETURN;
+        END;
+
+        INSERT INTO Producto (
+            prod_codigo,
+            prod_detalle,
+            prod_precio,
+            prod_familia,
+            prod_rubro,
+            prod_envase
+        )
+        SELECT
+            prod_codigo,
+            prod_detalle,
+            prod_precio,
+            prod_familia,
+            prod_rubro,
+            prod_envase
+        FROM inserted;
+    END;
+
+    -- UPDATE
+    ELSE
+    BEGIN
+        IF EXISTS (
+            SELECT 1
+            FROM inserted i
+            JOIN Producto p
+                ON p.prod_detalle = i.prod_detalle
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM deleted d
+                WHERE d.prod_codigo = p.prod_codigo
+            )
+        )
+        BEGIN
+            RAISERROR('Ya existe un producto con ese detalle.', 16, 1);
+            RETURN;
+        END;
+
+        UPDATE p
+        SET p.prod_detalle = i.prod_detalle,
+            p.prod_precio = i.prod_precio,
+            p.prod_familia = i.prod_familia,
+            p.prod_rubro = i.prod_rubro,
+            p.prod_envase = i.prod_envase
+        FROM Producto p
+        JOIN inserted i
+            ON p.prod_codigo = i.prod_codigo;
+    END;
+END;
+GO
+
+
+-------------------
 /* No permitir que se inserte o modifique un cliente con clie_telefono repetido. */
 CREATE OR ALTER TRIGGER TR_CLIE_TELEF_DUPLICADO
 ON Cliente
@@ -1545,137 +1617,105 @@ BEGIN TRANSACTION
 COMMIT TRANSACTION
 GO
 
-/* Parcial 01/07/2026 — SQL
-Enunciado
+/* Parcial Practico de Gestion de Datos - 28/07/2023
+TSQL
+2.    Suponiendo que se aplican los siguientes cambios en el modelo de datos:
+         Cambio 1) create table provincia (id int primary key, nombre char(100)) ;
+         Cambio 2) alter table cliente add pcia_id int null;
+Crear el/los objetos necesarios para implementar el concepto de foreign key entre 2 cliente y provincia.
+Nota: No se permite agregar una constraint de tipo FOREIGN KEY entre la tabla y el campo agregado. */
+-- Cambios del enunciado
+CREATE TABLE Provincia (id INT PRIMARY KEY, nombre CHAR(100))
+ALTER TABLE Cliente ADD pcia_id INT NULL
+GO
 
-Realizar una consulta SQL que devuelva los pares de productos vendidos juntos en una misma factura durante el año 2011, que sean del mismo rubro y mismo envase, y que hayan sido vendidos juntos más de 50 veces.
+-- 1) Lado hijo: un cliente no puede apuntar a una provincia inexistente
+CREATE TRIGGER TR_CLIENTE_FK_PROVINCIA ON Cliente
+AFTER INSERT, UPDATE
+AS
+SET TRANSACTION ISOLATION LEVEL SERIALIZABLE
+BEGIN TRANSACTION
+    IF EXISTS (SELECT 1
+               FROM inserted i
+               WHERE i.pcia_id IS NOT NULL          -- una FK nullable permite NULL
+                 AND NOT EXISTS (SELECT 1 FROM Provincia p WHERE p.id = i.pcia_id))
+    BEGIN
+        RAISERROR('La provincia indicada no existe.', 16, 1)
+        ROLLBACK TRANSACTION
+        RETURN
+    END
+COMMIT TRANSACTION
+GO
 
-Mostrar:
+-- 2) Lado padre: no se puede borrar una provincia usada por clientes
+CREATE TRIGGER TR_PROVINCIA_DELETE ON Provincia
+AFTER DELETE
+AS
+SET TRANSACTION ISOLATION LEVEL SERIALIZABLE
+BEGIN TRANSACTION
+    IF EXISTS (SELECT 1
+               FROM deleted d
+               JOIN Cliente c ON c.pcia_id = d.id)
+    BEGIN
+        RAISERROR('No se puede borrar: hay clientes con esa provincia.', 16, 1)
+        ROLLBACK TRANSACTION
+        RETURN
+    END
+COMMIT TRANSACTION
+GO
 
-Nro de fila
-Nombre del producto 1
-Nombre del producto 2
-Código de rubro
-Código de envase
-Porcentaje de unidades vendidas en 2011 que representa ese par
+-- 3) Lado padre: no se puede cambiar el id de una provincia usada por clientes
+--    (deleted = valores viejos, inserted = valores nuevos)
+CREATE TRIGGER TR_PROVINCIA_UPDATE ON Provincia
+AFTER UPDATE
+AS
+SET TRANSACTION ISOLATION LEVEL SERIALIZABLE
+BEGIN TRANSACTION
+    IF EXISTS (SELECT 1 FROM deleted WHERE id NOT IN (SELECT id FROM inserted))
+    BEGIN
+        IF EXISTS (SELECT 1
+                   FROM Cliente
+                   WHERE pcia_id IN (SELECT id FROM deleted)
+                     AND pcia_id NOT IN (SELECT id FROM inserted))
+        BEGIN
+            RAISERROR('No se puede cambiar el id: hay clientes con esa provincia.', 16, 1)
+            ROLLBACK TRANSACTION
+            RETURN
+        END
+    END
+COMMIT TRANSACTION
+GO
 
-Los productos del par deben mostrarse ordenados alfabéticamente.
-*/
+/* Si el ejercicio de arriba fuese por PK en vez de FK*/
+CREATE OR ALTER TRIGGER TR_PROVINCIA_PK
+ON Provincia
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    -- Controlar que ningún id sea NULL
+    IF EXISTS (
+        SELECT 1
+        FROM inserted
+        WHERE id IS NULL
+    )
+    BEGIN
+        ROLLBACK TRANSACTION;
+        RAISERROR('La clave primaria no puede ser NULL.', 16, 1);
+        RETURN;
+    END;
 
-SELECT
-    ROW_NUMBER() OVER(ORDER BY p1.prod_detalle ASC) AS Nro_Fila,
+    -- Controlar que no existan ids repetidos
+    IF EXISTS (
+        SELECT id
+        FROM Provincia
+        GROUP BY id
+        HAVING COUNT(*) > 1
+    )
+    BEGIN
+        ROLLBACK TRANSACTION;
+        RAISERROR('La clave primaria no puede estar repetida.', 16, 1);
+        RETURN;
+    END;
+END;
+GO
 
-    p1.prod_detalle AS Nombre_Prod1,
-    p2.prod_detalle AS Nombre_Prod2,
-
-    r.rubr_id AS Cod_Rubro,
-    e.enva_codigo AS Cod_Envase,
-
-    ISNULL(CAST(
-        SUM(i1.item_cantidad + i2.item_cantidad) * 100.0 /
-        (
-            SELECT SUM(i3.item_cantidad)
-            FROM Factura f3
-            JOIN Item_Factura i3
-                ON i3.item_tipo = f3.fact_tipo
-               AND i3.item_sucursal = f3.fact_sucursal
-               AND i3.item_numero = f3.fact_numero
-            WHERE YEAR(f3.fact_fecha) = 2011
-        )
-        AS DECIMAL(12,2)
-    ), 0) AS Porcentaje_Unidades_2011
-
-FROM Factura f
-JOIN Item_Factura i1
-    ON f.fact_tipo = i1.item_tipo
-   AND f.fact_sucursal = i1.item_sucursal
-   AND f.fact_numero = i1.item_numero
-
-JOIN Producto p1
-    ON i1.item_producto = p1.prod_codigo
-
-JOIN Item_Factura i2
-    ON f.fact_tipo = i2.item_tipo
-   AND f.fact_sucursal = i2.item_sucursal
-   AND f.fact_numero = i2.item_numero
-
-JOIN Producto p2
-    ON i2.item_producto = p2.prod_codigo
-
-JOIN Rubro r
-    ON p1.prod_rubro = r.rubr_id
-   AND p2.prod_rubro = r.rubr_id
-
-JOIN Envases e
-    ON p1.prod_envase = e.enva_codigo
-   AND p2.prod_envase = e.enva_codigo
-
-WHERE YEAR(f.fact_fecha) = 2011
-  AND p1.prod_detalle < p2.prod_detalle
-
-GROUP BY
-    p1.prod_codigo,
-    p1.prod_detalle,
-    p2.prod_codigo,
-    p2.prod_detalle,
-    r.rubr_id,
-    e.enva_codigo
-
-HAVING COUNT(DISTINCT f.fact_tipo + '-' + f.fact_sucursal + '-' + f.fact_numero) > 50
-
-ORDER BY
-    Nombre_Prod1 ASC;
-
-/* Parcial 08/07/2026 — SQL
-Enunciado
-
-Realizar una consulta SQL que devuelva, para cada cliente:
-
-a. Razón social
-b. Período AAAAMM en que realizó mayor cantidad de compras
-c. Cantidad de productos distintos adquiridos
-d. Importe total facturado
-
-Ordenar de forma descendente por la cantidad de facturas emitidas para cada cliente.
-*/
-
-SELECT
-    c.clie_razon_social AS Razon_Social,
-
-    ISNULL((
-        SELECT TOP 1
-            CAST(YEAR(fp.fact_fecha) AS CHAR(4)) +
-            RIGHT('0' + CAST(MONTH(fp.fact_fecha) AS VARCHAR(2)), 2)
-        FROM Factura fp
-        WHERE fp.fact_cliente = c.clie_codigo
-        GROUP BY 
-            YEAR(fp.fact_fecha),
-            MONTH(fp.fact_fecha)
-        ORDER BY
-            COUNT(DISTINCT fp.fact_tipo + '-' + fp.fact_sucursal + '-' + fp.fact_numero) DESC,
-            YEAR(fp.fact_fecha),
-            MONTH(fp.fact_fecha)
-    ), '000000') AS Periodo,
-
-    ISNULL((
-        SELECT COUNT(DISTINCT i2.item_producto)
-        FROM Factura f2
-        JOIN Item_Factura i2
-            ON i2.item_tipo = f2.fact_tipo
-           AND i2.item_sucursal = f2.fact_sucursal
-           AND i2.item_numero = f2.fact_numero
-        WHERE f2.fact_cliente = c.clie_codigo
-    ), 0) AS Cantidad_Productos_Distintos,
-
-    SUM(f.fact_total) AS Importe_Total
-
-FROM Cliente c
-JOIN Factura f
-    ON c.clie_codigo = f.fact_cliente
-
-GROUP BY
-    c.clie_codigo,
-    c.clie_razon_social
-
-ORDER BY
-    COUNT(DISTINCT f.fact_tipo + '-' + f.fact_sucursal + '-' + f.fact_numero) DESC;
