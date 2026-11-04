@@ -581,3 +581,85 @@ UPDATE Provincia SET id = 50 WHERE id = 1          -- debe dar error
 UPDATE Provincia SET nombre = 'BA' WHERE id = 1    -- debe pasar
 DELETE FROM Provincia WHERE id = 1                 -- debe dar error
 
+/* Parcial 17/07/2026 Bases de Datos 1C-2026
+SQL
+Realice una consulta SQL que devuelva, para cada producto con STOCK positivo (stoc_cantidad >), la siguiente información:
+a. Nombre del producto
+b. El período (formato AAAAMM) en el que realizó la mayor cantidad de compras en unidades
+c. La cantidad de productos compuestos distintos que tiene
+La consulta deberá ordenar los resultados en forma descendente según la cantidad de facturas en las que se encuentra.
+Nota: No se permiten sub-select en el from ni CTES
+
+T-SQL
+Implementar los objetos de base de datos necesarios (por ejemplo, triggers, procedimientos, funciones u otros mecanismos 
+que considere apropiados) para mantener permanentemente actualizada una tabla denominada ProductosAcumulados
+La tabla deberá almacenar, para cada producto y período (formato AAAAMM), la siguiente información:
+Código del producto
+Período (AAAAMM)
+Cantidad total vendida en el período
+Precio máximo de venta del producto registrado en el período
+Precio mínimo de venta del producto registrado en el período
+Importe total vendido en el período
+La actualización de la tabla deberá realizarse en tiempo real, reflejando automáticamente cada alta, modificación o 
+eliminación de ventas, de manera que la información permanezca siempre consistente con los datos operacionales. */ 
+
+CREATE TABLE ProductosAcumulados (
+    producto CHAR(8),
+    periodo CHAR(6),
+    cantidad_total DECIMAL(12,2),
+    precio_maximo DECIMAL(12,2),
+    precio_minimo DECIMAL(12,2),
+    importe_total DECIMAL(12,2),
+
+    PRIMARY KEY (producto, periodo)
+);
+GO
+
+CREATE OR ALTER PROCEDURE SP_ACTUALIZAR_PRODUCTOS_ACUMULADOS
+AS
+BEGIN
+    DELETE FROM ProductosAcumulados;
+
+    INSERT INTO ProductosAcumulados (
+        producto,
+        periodo,
+        cantidad_total,
+        precio_maximo,
+        precio_minimo,
+        importe_total
+    )
+    SELECT
+        i.item_producto,
+        LEFT(CONVERT(CHAR(8), f.fact_fecha, 112), 6),
+        SUM(i.item_cantidad),
+        MAX(i.item_precio),
+        MIN(i.item_precio),
+        SUM(i.item_cantidad * i.item_precio)
+    FROM Item_Factura i
+    JOIN Factura f
+        ON f.fact_tipo = i.item_tipo
+       AND f.fact_sucursal = i.item_sucursal
+       AND f.fact_numero = i.item_numero
+    GROUP BY
+        i.item_producto,
+        LEFT(CONVERT(CHAR(8), f.fact_fecha, 112), 6);
+END;
+GO
+
+CREATE OR ALTER TRIGGER TR_ACTUALIZAR_PRODUCTOS_ACUMULADOS
+ON Item_Factura
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    EXEC SP_ACTUALIZAR_PRODUCTOS_ACUMULADOS;
+END;
+GO
+
+CREATE OR ALTER TRIGGER TR_ACTUALIZAR_PRODUCTOS_ACUMULADOS_FACTURA
+ON Factura
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    EXEC SP_ACTUALIZAR_PRODUCTOS_ACUMULADOS;
+END;
+GO
