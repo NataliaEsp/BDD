@@ -602,7 +602,38 @@ Precio mínimo de venta del producto registrado en el período
 Importe total vendido en el período
 La actualización de la tabla deberá realizarse en tiempo real, reflejando automáticamente cada alta, modificación o 
 eliminación de ventas, de manera que la información permanezca siempre consistente con los datos operacionales. */ 
-
+--SQL
+SELECT 
+    -- a
+	p.prod_detalle AS Nombre_Prod,
+	-- b
+    ISNULL((
+        SELECT TOP 1
+            CAST(YEAR(fp.fact_fecha) AS CHAR(4)) +
+            RIGHT('0' + CAST(MONTH(fp.fact_fecha) AS VARCHAR(2)), 2)
+        FROM Factura fp
+        JOIN Item_Factura i2 ON fp.fact_tipo = i2.item_tipo AND fp.fact_sucursal = i2.item_sucursal AND fp.fact_numero = i2.item_numero
+        WHERE i2.item_producto = p.prod_codigo
+        GROUP BY 
+            YEAR(fp.fact_fecha),
+            MONTH(fp.fact_fecha)
+        ORDER BY
+            SUM(i.item_cantidad) DESC,
+            YEAR(fp.fact_fecha),
+            MONTH(fp.fact_fecha)
+    ), '000000') AS Periodo,
+    -- c
+    ISNULL(COUNT(DISTINCT c.comp_componente)
+    ,0) AS Cantidad_Compuestos
+FROM Producto p
+JOIN STOCK s ON s.stoc_producto = p.prod_codigo
+left JOIN Composicion c ON c.comp_producto = p.prod_codigo
+JOIN Item_Factura i ON i.item_producto = p.prod_codigo
+WHERE s.stoc_cantidad > 0 
+GROUP BY p.prod_codigo, p.prod_detalle
+ORDER BY COUNT(DISTINCT i.item_tipo + i.item_sucursal + i.item_numero) DESC
+	
+--TSQL
 CREATE TABLE ProductosAcumulados (
     producto CHAR(8),
     periodo CHAR(6),
