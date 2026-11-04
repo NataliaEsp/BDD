@@ -470,6 +470,30 @@ GROUP BY p.prod_detalle, p.prod_precio
 HAVING COUNT(DISTINCT c.comp_componente) > 2
 ORDER BY COUNT(DISTINCT c.comp_componente) DESC
 
+/* 12. Mostrar nombre de producto, cantidad de clientes distintos que lo compraron, importe 
+promedio pagado por el producto, cantidad de depósitos en los cuales hay stock del producto 
+y stock actual del producto en todos los depósitos. Se deberán mostrar 
+aquellos productos que hayan tenido operaciones en el año 2012 y los datos deberán 
+ordenarse de mayor a menor por monto vendido del producto. */
+SELECT
+	p.prod_detalle AS Nombre_Prod,
+	COUNT(DISTINCT f.fact_cliente) AS Cant_Cliente,
+	SUM(i.item_cantidad * i.item_precio)/SUM(i.item_cantidad) AS Promedio_Pagado,
+	ISNULL((SELECT COUNT(*)
+            FROM Stock s
+            WHERE s.stoc_producto = p.prod_codigo
+              AND s.stoc_cantidad > 0), 0) AS Cant_Depositos_Con_Stock,
+    ISNULL((SELECT SUM(s.stoc_cantidad)
+            FROM Stock s
+            WHERE s.stoc_producto = p.prod_codigo), 0) AS Stock_Actual
+FROM Producto p
+JOIN Item_Factura i on P.prod_codigo = I.item_producto
+JOIN Factura f ON i.item_tipo = f.fact_tipo AND i.item_sucursal = f.fact_sucursal AND i.item_numero = f.fact_numero
+JOIN STOCK s ON p.prod_codigo = s.stoc_producto
+WHERE YEAR(f.fact_fecha) = 2012
+GROUP BY p.prod_codigo, p.prod_detalle
+ORDER BY SUM(i.item_cantidad * i.item_precio) DESC
+
 /* 15. Escriba una consulta que retorne los pares de productos que hayan sido vendidos juntos (en la misma factura) 
     más de 500 veces. 
 El resultado debe mostrar: 
@@ -479,9 +503,9 @@ Los distintos pares no deben retornarse más de una vez.
  
 Ejemplo de lo que retornaría la consulta: 
   
-PROD1 DETALLE1 PROD2 DETALLE2 VECES 
-1731 MARLBORO KS 1 7 1 8 P H ILIPS MORRIS KS 5 0 7 
-1718 PHILIPS MORRIS KS 1 7 0 5 P H I L I P S MORRIS BOX 10 5 6 2*/
+PROD1   DETALLE1            PROD2 DETALLE2                  VECES 
+1731    MARLBORO KS         1718  PHILIPS MORRIS KS         507 
+1718    PHILIPS MORRIS KS   1705  PHILIPS MORRIS BOX 10     562     */
 SELECT
     p1.prod_codigo AS PROD1,
     p1.prod_detalle AS DETALLE1,
@@ -613,7 +637,41 @@ JOIN Factura f ON i.item_tipo = f.fact_tipo AND i.item_sucursal = f.fact_sucursa
 WHERE YEAR(f.fact_fecha) = 2011
 GROUP BY r.rubr_id, MONTH(f.fact_fecha)
 
-/* 1. El objetivo es realizar una consulta SQL que identifique a los productos que fueron comprados 
+/* 30. Se desea obtener una estadistica de ventas del año 2012, para los empleados que sean 
+jefes, o sea, que tengan empleados a su cargo, para ello se requiere que realice la 
+consulta que retorne las siguientes columnas: 
+ Nombre del Jefe 
+ Cantidad de empleados a cargo 
+ Monto total vendido de los empleados a cargo 
+ Cantidad de facturas realizadas por los empleados a cargo 
+ Nombre del empleado con mejor ventas de ese jefe 
+Debido a la perfomance requerida, solo se permite el uso de una subconsulta si fuese 
+necesario. 
+Los datos deberan ser ordenados por de mayor a menor por el Total vendido y solo se 
+deben mostrarse los jefes cuyos subordinados hayan realizado más de 10 facturas. */
+SELECT 
+    j.empl_nombre AS Nombre_Jefe,
+    COUNT(DISTINCT e.empl_codigo) AS Cant_Empleados,
+    ISNULL(SUM(f.fact_total), 0) AS Monto_Total,
+    COUNT(DISTINCT f.fact_tipo + f.fact_sucursal + f.fact_numero) AS Cant_Facturas,
+    (SELECT TOP 1 e2.empl_nombre
+     FROM Empleado e2
+     JOIN Factura f2 ON f2.fact_vendedor = e2.empl_codigo
+     WHERE e2.empl_jefe = j.empl_codigo
+       AND YEAR(f2.fact_fecha) = 2012
+     GROUP BY e2.empl_codigo, e2.empl_nombre
+     ORDER BY SUM(f2.fact_total) DESC, e2.empl_codigo) AS Empl_Mejor_Ventas
+FROM Empleado j
+JOIN Empleado e ON e.empl_jefe = j.empl_codigo
+JOIN Factura f ON e.empl_codigo = f.fact_vendedor /* o hacer LEFT JOIN ... AND YEAR(f.fact_fecha) = 2012*/
+WHERE YEAR(f.fact_fecha) = 2012
+GROUP BY j.empl_codigo, j.empl_nombre
+HAVING COUNT(DISTINCT f.fact_tipo + f.fact_sucursal + f.fact_numero) > 10
+ORDER BY SUM(f.fact_total) DESC
+
+
+/* Parcial Práctico de Gestión de Datos - 12/07/2025
+1. El objetivo es realizar una consulta SQL que identifique a los productos que fueron comprados 
 en todos los años impares que hay registrados en la base.
 De esos productos se debe mostrar los siguientes datos:
 
@@ -631,7 +689,9 @@ SELECT
             WHERE iu.item_producto = p.prod_codigo
               AND YEAR(fu.fact_fecha) = (
                     SELECT MAX(YEAR(fx.fact_fecha))
-                    FROM Factura fx) ), 0) DESC, p.prod_codigo) AS Nro_Fila,
+                    FROM Factura fx
+                    WHERE YEAR(fx.fact_fecha) % 2 != 0) 
+                    ), 0) DESC, p.prod_codigo) AS Nro_Fila,
     p.prod_detalle AS Nombre_Prod,
     SUM(i.item_cantidad * i.item_precio) AS Monto_Comprado_ARS
 FROM Producto p
@@ -645,26 +705,6 @@ HAVING COUNT(DISTINCT CASE WHEN YEAR(f.fact_fecha) % 2 != 0
             FROM Factura f2
             WHERE YEAR(f2.fact_fecha) % 2 != 0 )
 ORDER BY Nro_Fila
--- Fail lo mío de abajo
-SELECT 
-    ROW_NUMBER() OVER(ORDER BY SUM(i.item_cantidad * i.item_precio) DESC) AS Nro_Fila,
-    p.prod_detalle AS Nombre_Prod,
-    SUM(i.item_cantidad * i.item_precio) AS Monto_Comprado
-FROM Producto p
-JOIN Item_Factura i ON p.prod_codigo = i.item_producto
-JOIN Factura f ON i.item_tipo = f.fact_tipo AND i.item_sucursal = f.fact_sucursal AND i.item_numero = f.fact_numero
-GROUP BY i.item_producto, p.prod_detalle, f.fact_fecha
-HAVING i.item_producto IN (
-    SELECT 
-        i2.item_producto
-    FROM Item_Factura i2
-    JOIN Factura f2 ON i2.item_tipo = f2.fact_tipo AND i2.item_sucursal = f2.fact_sucursal AND i2.item_numero = f2.fact_numero
-    WHERE f.fact_fecha = f2.fact_fecha
-        AND (YEAR(f2.fact_fecha) % 2) != 0)
-ORDER BY (SELECT
-            SUM(i.item_cantidad)
-          FROM Item_Factura i
-          /*JOIN Factura ON ... Todo mal*/) DESC
 
 /* Parcial Practico de Gestión de Datos - 28/06/2025
 1. El objetivo es realizar una consulta SQL que identifique a los clientes que compraron productos que pertenezcan 
@@ -1186,3 +1226,35 @@ ORDER BY
               )
         ) THEN 0 ELSE 1
     END, f.fact_cliente
+
+/* Parcial 08/07/2026 Bases de Datos 1C-2026
+SQL
+Realice una consulta SQL que devuelva, para cada cliente, la siguiente información:
+a. Razón social del cliente.
+b. El período (formato AAAAMM) en el que realizó la mayor cantidad de compras (en cantidades).
+c. La cantidad de productos distintos adquiridos.
+d. El importe total facturado.
+La consulta deberá ordenar los resultados en forma descendente según la cantidad de facturas emitidas para cada cliente.
+Nota: No se permiten sub-select en el from ni CTEs. */
+SELECT
+    c.clie_razon_social AS Razon_Social,
+    (SELECT TOP 1
+        CAST(YEAR(fp.fact_fecha) AS CHAR(4)) +
+            RIGHT('0' + CAST(MONTH(fp.fact_fecha) AS VARCHAR(2)), 2)
+     FROM Factura fp
+     WHERE fp.fact_cliente = c.clie_codigo
+     GROUP BY YEAR(fp.fact_fecha), MONTH(fp.fact_fecha)
+     ORDER BY COUNT(DISTINCT fp.fact_tipo + '-' + fp.fact_sucursal + '-' + fp.fact_numero) DESC,
+            YEAR(fp.fact_fecha), MONTH(fp.fact_fecha)
+    ) AS Periodo,
+    ISNULL((
+        SELECT COUNT(DISTINCT i2.item_producto)
+        FROM Factura f2
+        JOIN Item_Factura i2 ON i2.item_tipo = f2.fact_tipo AND i2.item_sucursal = f2.fact_sucursal AND i2.item_numero = f2.fact_numero
+        WHERE f2.fact_cliente = c.clie_codigo
+    ), 0) AS Cantidad_Productos_Distintos,
+    SUM(f.fact_total) AS Importe_Total
+FROM Cliente c
+JOIN Factura f ON c.clie_codigo = f.fact_cliente
+GROUP BY c.clie_codigo, c.clie_razon_social
+ORDER BY COUNT(DISTINCT f.fact_tipo+f.fact_sucursal+f.fact_numero) DESC
