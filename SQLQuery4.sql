@@ -903,3 +903,155 @@ order by (select sum(comp_cantidad)
 		  from composicion 
 		  where comp_producto = p.prod_codigo) desc -- cantidad de componentes, en su cantidad correspondiente
 go
+
+/* PARCIAL GESTIÓN DE DATOS - 06/07/2022
+SQL
+1.    Realizar una consulta SQL que muestra a aquellos clientes no compran productos compuestos en el 2011 pero si en el 2012, retornar.
+
+a.    Número de Fila: Si considera número 1 al cliente que menos compro y N al que más compro.
+b.    Monto total comprado del cliente en 2012.
+c.    cantidad de rubros distintos comprados en el 2012.
+
+Nota: No se permiten SubSelect en el FROM. Se considera subselect a las consultas del tipo select … from (select …) as T join ….
+*/
+SELECT
+    ROW_NUMBER() OVER (
+        ORDER BY SUM(i.item_cantidad * i.item_precio) ASC
+    ) AS Numero_Fila,
+
+    c.clie_codigo,
+    c.clie_razon_social,
+
+    SUM(i.item_cantidad * i.item_precio) AS Monto_Total,
+
+    COUNT(DISTINCT p.prod_rubro) AS Cantidad_Rubros
+
+FROM Cliente c
+JOIN Factura f
+    ON f.fact_cliente = c.clie_codigo
+JOIN Item_Factura i
+    ON i.item_tipo = f.fact_tipo
+    AND i.item_sucursal = f.fact_sucursal
+    AND i.item_numero = f.fact_numero
+JOIN Producto p
+    ON p.prod_codigo = i.item_producto
+
+WHERE YEAR(f.fact_fecha) = 2012
+
+AND EXISTS (
+    SELECT 1
+    FROM Factura f2
+    JOIN Item_Factura i2
+        ON i2.item_tipo = f2.fact_tipo
+        AND i2.item_sucursal = f2.fact_sucursal
+        AND i2.item_numero = f2.fact_numero
+    JOIN Composicion co
+        ON co.comp_producto = i2.item_producto
+    WHERE f2.fact_cliente = c.clie_codigo
+      AND YEAR(f2.fact_fecha) = 2012
+)
+
+AND NOT EXISTS (
+    SELECT 1
+    FROM Factura f3
+    JOIN Item_Factura i3
+        ON i3.item_tipo = f3.fact_tipo
+        AND i3.item_sucursal = f3.fact_sucursal
+        AND i3.item_numero = f3.fact_numero
+    JOIN Composicion co3
+        ON co3.comp_producto = i3.item_producto
+    WHERE f3.fact_cliente = c.clie_codigo
+      AND YEAR(f3.fact_fecha) = 2011
+)
+
+GROUP BY
+    c.clie_codigo,
+    c.clie_razon_social
+
+ORDER BY
+    SUM(i.item_cantidad * i.item_precio) ASC;
+
+/* Parcial Practico de Gestion de Datos - 28/07/2023
+SQL
+1.    Realizar una consulta SQL que devuelva todos los clientes que durante 2 años consecutivos compraron al menos 5 productos distintos. De esos clientes mostrar:
+●     El código de cliente
+●     El monto total comprado en el 2012
+●     La cantidad de unidades de productos compradas en el 2012
+
+  El resultado debe ser ordenado primero por aquellos clientes que compraron solo productos compuestos en algún momento, luego el resto.
+
+Nota: No se permiten select en el from, es decir, select … from (select …) as T,... */
+SELECT
+    c.clie_codigo,
+
+    ISNULL(SUM(i.item_cantidad * i.item_precio), 0) AS Monto_Total_2012,
+
+    ISNULL(SUM(i.item_cantidad), 0) AS Unidades_2012
+
+FROM Cliente c
+LEFT JOIN Factura f ON f.fact_cliente = c.clie_codigo
+    AND YEAR(f.fact_fecha) = 2012
+LEFT JOIN Item_Factura i ON i.item_tipo = f.fact_tipo AND i.item_sucursal = f.fact_sucursal AND i.item_numero = f.fact_numero
+
+WHERE EXISTS (
+    SELECT 1
+    FROM Factura f1
+    WHERE f1.fact_cliente = c.clie_codigo
+
+    AND (
+        SELECT COUNT(DISTINCT i1.item_producto)
+        FROM Factura fa1
+        JOIN Item_Factura i1
+            ON i1.item_tipo = fa1.fact_tipo
+            AND i1.item_sucursal = fa1.fact_sucursal
+            AND i1.item_numero = fa1.fact_numero
+        WHERE fa1.fact_cliente = c.clie_codigo
+          AND YEAR(fa1.fact_fecha) = YEAR(f1.fact_fecha)
+    ) >= 5
+
+    AND (
+        SELECT COUNT(DISTINCT i2.item_producto)
+        FROM Factura fa2
+        JOIN Item_Factura i2
+            ON i2.item_tipo = fa2.fact_tipo
+            AND i2.item_sucursal = fa2.fact_sucursal
+            AND i2.item_numero = fa2.fact_numero
+        WHERE fa2.fact_cliente = c.clie_codigo
+          AND YEAR(fa2.fact_fecha) = YEAR(f1.fact_fecha) + 1
+    ) >= 5
+)
+
+GROUP BY c.clie_codigo
+
+ORDER BY
+    CASE
+        WHEN EXISTS (
+            SELECT 1
+            FROM Factura fx
+            WHERE fx.fact_cliente = c.clie_codigo
+
+            AND EXISTS (
+                SELECT 1
+                FROM Item_Factura ix
+                WHERE ix.item_tipo = fx.fact_tipo
+                  AND ix.item_sucursal = fx.fact_sucursal
+                  AND ix.item_numero = fx.fact_numero
+            )
+
+            AND NOT EXISTS (
+                SELECT 1
+                FROM Item_Factura ix
+                WHERE ix.item_tipo = fx.fact_tipo
+                  AND ix.item_sucursal = fx.fact_sucursal
+                  AND ix.item_numero = fx.fact_numero
+
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM Composicion co
+                      WHERE co.comp_producto = ix.item_producto
+                  )
+            )
+        )
+        THEN 0
+        ELSE 1
+    END;
