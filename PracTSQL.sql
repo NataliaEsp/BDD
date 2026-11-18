@@ -1098,9 +1098,63 @@ por el cliente.
 El resultado deberá ser ordenado por razón social del cliente
 alfabéticamente primero y luego, los clientes que compraron entre un
 20% y 30% del total facturado en el 2012 primero, luego, los restantes.
-Nota: No se permiten select en el from, es decir, select ... from (select ...) as T....
+Nota: No se permiten select en el from, es decir, select ... from (select ...) as T.... */
+SELECT 
+    c.clie_codigo AS Codigo_Cliente,
+    (
+        SELECT TOP 1 p2.prod_codigo
+        FROM Factura f2
+        JOIN Item_Factura i2 ON i2.item_tipo = f2.fact_tipo 
+                            AND i2.item_sucursal = f2.fact_sucursal 
+                            AND i2.item_numero = f2.fact_numero
+        JOIN Producto p2 ON p2.prod_codigo = i2.item_producto
+        WHERE f2.fact_cliente = c.clie_codigo
+          AND YEAR(f2.fact_fecha) = 2012
+        GROUP BY p2.prod_codigo
+        ORDER BY SUM(i2.item_cantidad) DESC, p2.prod_codigo ASC
+    ) AS Producto_Mas_Comprado_Cod,
+    (
+        SELECT TOP 1 p3.prod_detalle
+        FROM Factura f3
+        JOIN Item_Factura i3 ON i3.item_tipo = f3.fact_tipo 
+                            AND i3.item_sucursal = f3.fact_sucursal 
+                            AND i3.item_numero = f3.fact_numero
+        JOIN Producto p3 ON p3.prod_codigo = i3.item_producto
+        WHERE f3.fact_cliente = c.clie_codigo
+          AND YEAR(f3.fact_fecha) = 2012
+        GROUP BY p3.prod_codigo, p3.prod_detalle
+        ORDER BY SUM(i3.item_cantidad) DESC, p3.prod_codigo ASC
+    ) AS Producto_Mas_Comprado_Nombre,
+    COUNT(DISTINCT i.item_producto) AS Cant_Productos_Distintos,
+    COUNT(DISTINCT CASE 
+        WHEN i.item_producto IN (SELECT comp_producto FROM Composicion) 
+        THEN i.item_producto 
+    END) AS Cant_Productos_Compuestos
+FROM Cliente c
+JOIN Factura f ON f.fact_cliente = c.clie_codigo
+JOIN Item_Factura i ON i.item_tipo = f.fact_tipo 
+                   AND i.item_sucursal = f.fact_sucursal 
+                   AND i.item_numero = f.fact_numero
+JOIN Producto p ON p.prod_codigo = i.item_producto
+WHERE YEAR(f.fact_fecha) = 2012
+GROUP BY c.clie_codigo, c.clie_razon_social
+HAVING COUNT(DISTINCT p.prod_rubro) = (SELECT COUNT(*) FROM Rubro)
+ORDER BY 
+    c.clie_razon_social ASC,
+    CASE 
+        WHEN (
+            SELECT SUM(f4.fact_total) 
+            FROM Factura f4 
+            WHERE f4.fact_cliente = c.clie_codigo AND YEAR(f4.fact_fecha) = 2012
+        ) BETWEEN 
+            0.20 * (SELECT SUM(f5.fact_total) FROM Factura f5 WHERE YEAR(f5.fact_fecha) = 2012)
+        AND 
+            0.30 * (SELECT SUM(f5.fact_total) FROM Factura f5 WHERE YEAR(f5.fact_fecha) = 2012)
+        THEN 1 
+        ELSE 2 
+    END ASC;
 
-2. Implementar una regla de negocio en línea que al realizar una venta
+/* 2. Implementar una regla de negocio en línea que al realizar una venta
 (SOLO INSERCION) permita componer los productos descompuestos,
 es decir, si se guardan en la factura 2 hamb. 2 papas 2 gaseosas se
 deberá guardar en la factura 2 (DOS) COMBO1. Si 1 combo1 equivale
