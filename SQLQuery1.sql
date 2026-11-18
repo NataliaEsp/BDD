@@ -231,7 +231,7 @@ GROUP BY
     Envases.enva_detalle
 HAVING COUNT(*) > 5
 ORDER BY p1.prod_detalle;
-
+go
 -- PRAC TSQL: SP
 CREATE OR ALTER PROCEDURE productos_por_rubro
     @codigo_rubro CHAR(4)
@@ -242,8 +242,9 @@ BEGIN
     JOIN Rubro r ON r.rubr_id = p.prod_rubro
     WHERE r.rubr_id = @codigo_rubro;
 END;
-
+go
 EXEC productos_por_rubro '0001'
+go
 -------------------------------------------
 CREATE OR ALTER PROCEDURE actualizar_precio
     @codigo_prod CHAR(8),
@@ -265,6 +266,7 @@ BEGIN
         PRINT 'El producto no existe';
     END;
 END;
+go
 ----------------------------------------------
 /* UPDATE nombre_tabla 
 SET columna1 = valor1, columna2 = valor2 
@@ -285,6 +287,7 @@ BEGIN
 
     RETURN @resultado;
 END;
+GO
 ----------------------------------------
 CREATE OR ALTER FUNCTION dbo.obtener_razon_social
 (
@@ -301,6 +304,7 @@ BEGIN
 
     RETURN @raz_soc;
 END;
+GO
 ------------------------------------------
 CREATE OR ALTER FUNCTION dbo.obtener_rubro
 (
@@ -320,6 +324,7 @@ BEGIN
 
     RETURN @raz_soc;
 END;
+GO
 -------------------------------------------
 /* 1. Hacer una función que dado un artículo y un deposito devuelva un string que 
 indique el estado del depósito según el artículo. Si la cantidad almacenada es 
@@ -354,8 +359,9 @@ BEGIN
 
     RETURN @estado;
 END
+GO
 --
-SELECT dbo.estado_depo('00000032', '00');
+SELECT dbo.estado_depo('00000032', '00'); GO
 ----
 /* 2. Realizar una función que dado un artículo y una fecha, retorne el stock que 
 existía a esa fecha */
@@ -377,7 +383,7 @@ BEGIN
 
     RETURN @stock;
 END;
-
+GO
 /* 11. Cree el/los objetos de base de datos necesarios para que dado un código de 
 empleado se retorne la cantidad de empleados que este tiene a su cargo (directa o 
 indirectamente). Solo contar aquellos empleados (directos o indirectos) que 
@@ -403,7 +409,7 @@ BEGIN
 
     RETURN @cantidad;
 END;
-
+GO
 /* 13. Cree el/los objetos de base de datos necesarios para implantar la siguiente regla 
 “Ningún jefe puede tener un salario mayor al 20% de las suma de los salarios de 
 sus empleados totales (directos + indirectos)”. Se sabe que en la actualidad dicha 
@@ -428,6 +434,7 @@ BEGIN
 
     RETURN @total;
 END;
+GO
 
 CREATE OR ALTER TRIGGER TR_VALIDAR_SALARIO_JEFE
 ON Empleado
@@ -456,7 +463,7 @@ BEGIN
         RETURN;
     END;
 END;
-
+GO
 /* 14. Agregar el/los objetos necesarios para que si un cliente compra un producto 
 compuesto a un precio menor  que la suma de los precios de sus componentes  
 que imprima la  fecha, que cliente, que productos y a qué precio se realizó la 
@@ -606,7 +613,7 @@ BEGIN
 
     RETURN @precio;
 END;
-
+GO
 /* 16. Desarrolle el/los elementos de base de datos necesarios para que ante una venta 
 automaticamante se descuenten del stock los articulos vendidos. Se descontaran 
 del deposito que mas producto poseea y se supone que el stock se almacena 
@@ -761,26 +768,20 @@ UPDATE STOCK
 SET stoc_cantidad = 150
 WHERE stoc_producto = '90000001'
   AND stoc_deposito = '01';
-
+GO
 /* 19. Cree el/los objetos de base de datos necesarios para que se cumpla la siguiente 
 regla de negocio automáticamente “Ningún jefe puede tener menos de 5 años de 
 antigüedad y tampoco puede tener más del 50% del personal a su cargo 
 (contando directos e indirectos) a excepción del gerente general”. Se sabe que en 
 la actualidad la regla se cumple y existe un único gerente general. */
 CREATE OR ALTER FUNCTION dbo.cantidad_empleados
-(
-    @cod_empleado NUMERIC(6)
-)
-RETURNS INT
+(    @cod_empleado NUMERIC(6)
+) RETURNS INT
 AS
 BEGIN
     DECLARE @cantidad INT;
-
     SET @cantidad = 0;
-
-    SELECT @cantidad = @cantidad
-        + 1
-        + dbo.cantidad_empleados(e.empl_codigo)
+    SELECT @cantidad = @cantidad + 1 + dbo.cantidad_empleados(e.empl_codigo)
     FROM Empleado e
     WHERE e.empl_jefe = @cod_empleado;
 
@@ -1029,23 +1030,26 @@ END;
 GO
 
 ------------------ VISTAS -------------------
-CREATE VIEW nombre_vista
-AS
-    SELECT columnas
-    FROM tabla
-    WHERE condicion;
+--CREATE VIEW nombre_vista
+--AS
+    --SELECT columnas
+    --FROM tabla
+    --WHERE condicion;
+GO
 -----------------------------------
 CREATE OR ALTER VIEW dbo.vista_clientes
 AS
     SELECT
         clie_codigo,
-        clie_razon_social,
-        clie_cuit
+        clie_razon_social--,
+        --clie_cuit
     FROM Cliente;
+GO
 -----------------------------------
 SELECT *
 FROM dbo.vista_clientes
 WHERE clie_codigo = 'C00001';
+GO
 -----------------------------------
 CREATE OR ALTER VIEW dbo.productos_caros
 AS
@@ -1055,6 +1059,7 @@ AS
         p.prod_precio
     FROM Producto P
     WHERE p.prod_precio > 10000;
+GO
 -----------------------------------
 /* Creá una vista llamada vista_facturas_clientes que muestre:
 - Tipo, sucursal y número de factura.
@@ -1072,6 +1077,7 @@ AS
         f.fact_total AS Total_Fact
     FROM Factura f
     JOIN Cliente c ON f.fact_cliente = c.clie_codigo
+GO
 ------------ STORED PROCEDURES ------------
 /* 3. Cree el/los objetos de base de datos necesarios para corregir la tabla empleado 
 en caso que sea necesario. Se sabe que debería existir un único gerente general 
@@ -1112,6 +1118,7 @@ BEGIN
 
     RETURN @cantidad_inicial;
 END;
+GO
 -- v2 (la mejor)
 CREATE OR ALTER PROCEDURE corregir_gerente_generalV2
 AS
@@ -1172,7 +1179,7 @@ GO
 DECLARE @mejor INT
 EXEC @mejor = sp_actualizar_comisiones
 SELECT @mejor AS Vendedor_Que_Mas_Vendio
-
+GO
 
 ------ PARCIALES
 /* =====================================================================
@@ -1202,21 +1209,21 @@ BEGIN
         UPDATE f
         SET f.fact_cliente = (SELECT MIN(c2.clie_codigo)
                               FROM Cliente c2
-                              WHERE c2.clie_cuit = c.clie_cuit)
+                              /*WHERE c2.clie_cuit = c.clie_cuit*/)
         FROM Factura f
         JOIN Cliente c ON c.clie_codigo = f.fact_cliente
-        WHERE c.clie_cuit IS NOT NULL
-          AND c.clie_codigo <> (SELECT MIN(c3.clie_codigo)
+        WHERE /*c.clie_cuit IS NOT NULL
+          AND*/ c.clie_codigo <> (SELECT MIN(c3.clie_codigo)
                                 FROM Cliente c3
-                                WHERE c3.clie_cuit = c.clie_cuit)
+                                /*WHERE c3.clie_cuit = c.clie_cuit*/)
 
         -- 2) borro los duplicados (ya no tienen facturas)
         DELETE c
         FROM Cliente c
-        WHERE c.clie_cuit IS NOT NULL
-          AND c.clie_codigo <> (SELECT MIN(c2.clie_codigo)
+        WHERE /*c.clie_cuit IS NOT NULL
+          AND*/ c.clie_codigo <> (SELECT MIN(c2.clie_codigo)
                                 FROM Cliente c2
-                                WHERE c2.clie_cuit = c.clie_cuit)
+                                /*WHERE c2.clie_cuit = c.clie_cuit*/)
 
     COMMIT TRANSACTION
 END
@@ -1230,8 +1237,8 @@ AS
 BEGIN
     IF EXISTS (SELECT 1
                FROM Cliente c
-               JOIN inserted i ON c.clie_cuit = i.clie_cuit        -- clie_cuit (NULL = NULL no une: bien)
-                              AND c.clie_codigo <> i.clie_codigo)
+               JOIN inserted i ON /*c.clie_cuit = i.clie_cuit        -- clie_cuit (NULL = NULL no une: bien)
+                              AND*/ c.clie_codigo <> i.clie_codigo)
     BEGIN
         RAISERROR('No se puede repetir el CUIT del cliente.', 16, 1)
         ROLLBACK TRANSACTION
@@ -1375,7 +1382,7 @@ BEGIN
               GROUP BY c.comp_producto) x ON x.prod = p.prod_codigo
         WHERE p.prod_precio <> x.precio
 
-        SET @n = @@ROWCOUNT        -- tiene que ir justo después del UPDATE
+        SET @n = @@ROWCOUNT -- tiene que ir justo después del UPDATE
     END
 END
 GO
@@ -1449,6 +1456,7 @@ AS
                     END
             END
         COMMIT TRANSACTION
+GO
 --V2
 CREATE OR ALTER TRIGGER tr_empleados ON Empleado
 AFTER INSERT, UPDATE, DELETE
@@ -1560,7 +1568,7 @@ CREATE TABLE Ventas
     renglon int, 
     ganancia decimal(12,2)
 )
-
+GO
 CREATE OR ALTER PROCEDURE sp_completar_ventas
     @desde SMALLDATETIME,
     @hasta SMALLDATETIME
@@ -1636,8 +1644,7 @@ BEGIN
         SUM(item_cantidad),
         MAX(item_precio)
     FROM inserted
-    GROUP BY
-        item_tipo, item_sucursal, item_numero, item_producto;
+    GROUP BY item_tipo, item_sucursal, item_numero, item_producto;
 
     -- 3. Recorrer los productos compuestos que aparecen
     --    en Composicion y cuyos componentes fueron recibidos
@@ -1645,10 +1652,8 @@ BEGIN
         SELECT DISTINCT
             p.tipo, p.sucursal, p.numero, c.comp_producto
         FROM #Pendientes p
-        JOIN Composicion c
-            ON c.comp_componente = p.producto
-        ORDER BY
-            p.tipo, p.sucursal, p.numero, c.comp_producto;
+        JOIN Composicion c ON c.comp_componente = p.producto
+        ORDER BY p.tipo, p.sucursal, p.numero, c.comp_producto;
 
     OPEN cursor_combos;
 
@@ -1665,12 +1670,9 @@ BEGIN
         -- 5. Contar componentes disponibles
         SELECT @componentes_presentes = COUNT(*)
         FROM Composicion c
-        JOIN #Pendientes p
-            ON p.producto = c.comp_componente
+        JOIN #Pendientes p ON p.producto = c.comp_componente
         WHERE c.comp_producto = @producto
-          AND p.tipo = @tipo
-          AND p.sucursal = @sucursal
-          AND p.numero = @numero
+          AND p.tipo = @tipo AND p.sucursal = @sucursal AND p.numero = @numero
           AND p.cantidad > 0;
 
         SET @cantidad_combos = 0;
@@ -1682,12 +1684,9 @@ BEGIN
             SELECT @cantidad_combos =
                 MIN(FLOOR(p.cantidad / c.comp_cantidad))
             FROM Composicion c
-            JOIN #Pendientes p
-                ON p.producto = c.comp_componente
+            JOIN #Pendientes p ON p.producto = c.comp_componente
             WHERE c.comp_producto = @producto
-              AND p.tipo = @tipo
-              AND p.sucursal = @sucursal
-              AND p.numero = @numero;
+              AND p.tipo = @tipo AND p.sucursal = @sucursal AND p.numero = @numero;
 
             -- 7. Si se puede formar al menos uno
             IF @cantidad_combos > 0
@@ -1706,16 +1705,11 @@ BEGIN
 
                 -- Descontar las cantidades utilizadas
                 UPDATE p
-                SET p.cantidad =
-                    p.cantidad -
-                    (@cantidad_combos * c.comp_cantidad)
+                SET p.cantidad = p.cantidad - (@cantidad_combos * c.comp_cantidad)
                 FROM #Pendientes p
-                JOIN Composicion c
-                    ON c.comp_componente = p.producto
+                JOIN Composicion c ON c.comp_componente = p.producto
                 WHERE c.comp_producto = @producto
-                  AND p.tipo = @tipo
-                  AND p.sucursal = @sucursal
-                  AND p.numero = @numero;
+                  AND p.tipo = @tipo AND p.sucursal = @sucursal AND p.numero = @numero;
             END;
         END;
 
@@ -1732,8 +1726,7 @@ BEGIN
         item_producto, item_cantidad, item_precio
     )
     SELECT
-        tipo, sucursal, numero,
-        producto, cantidad, precio
+        tipo, sucursal, numero, producto, cantidad, precio
     FROM #Compuestos;
 
     -- 9. Insertar los productos originales sobrantes
@@ -1742,8 +1735,7 @@ BEGIN
         item_producto, item_cantidad, item_precio
     )
     SELECT
-        tipo, sucursal, numero,
-        producto, cantidad, precio
+        tipo, sucursal, numero, producto, cantidad, precio
     FROM #Pendientes
     WHERE cantidad > 0;
 
@@ -1751,7 +1743,7 @@ BEGIN
     DROP TABLE #Compuestos;
     DROP TABLE #Pendientes;
 END;
-
+GO
 
 /* 2. Implementar una regla de negocio de validación en línea que permita
 validar el STOCK al realizarse una venta. Cada venta se debe
@@ -1762,8 +1754,7 @@ guardar ese articulo, pero si los otros en los cuales hay stock positivo.
 Es decir, solamente se deberán guardar aquellos para los cuales si hay
 stock, sin guardarse los que no poseen cantidades suficientes. */
 
-CREATE OR ALTER TRIGGER TR_VALIDAR_STOCK
-ON Item_Factura
+CREATE OR ALTER TRIGGER TR_VALIDAR_STOCK ON Item_Factura
 INSTEAD OF INSERT
 AS
 BEGIN
@@ -1775,7 +1766,7 @@ BEGIN
     DECLARE @precio DECIMAL(12,2);
 
     -- 1. Recorrer los artículos que se quieren vender
-    DECLARE cursor_ventas CURSOR LOCAL FAST_FORWARD FOR
+    DECLARE cursor_ventas CURSOR FOR
         SELECT
             item_tipo,
             item_sucursal,
@@ -1793,7 +1784,6 @@ BEGIN
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
-
         -- 2. Verificar si el producto es compuesto
         IF EXISTS (
             SELECT 1
@@ -1801,37 +1791,28 @@ BEGIN
             WHERE comp_producto = @producto
         )
         BEGIN
-
-            -- 3. Verificar que haya stock suficiente
-            --    de TODOS sus componentes en el depósito 00
+            -- 3. Verificar que haya stock suficiente de TODOS sus componentes en el depósito 00
             IF NOT EXISTS (
                 SELECT 1
                 FROM Composicion c
-                LEFT JOIN STOCK s
-                    ON s.stoc_producto = c.comp_componente
-                   AND s.stoc_deposito = '00'
+                LEFT JOIN STOCK s ON s.stoc_producto = c.comp_componente
+                                    AND s.stoc_deposito = '00'
                 WHERE c.comp_producto = @producto
-                  AND (
-                        s.stoc_producto IS NULL
-                        OR s.stoc_cantidad < @cantidad * c.comp_cantidad
-                  )
+                  AND ( s.stoc_producto IS NULL OR s.stoc_cantidad < @cantidad * c.comp_cantidad )
             )
             BEGIN
-
                 -- 4. Insertar el producto compuesto vendido
                 INSERT INTO Item_Factura
                 VALUES (
                     @tipo, @sucursal, @numero,
                     @producto, @cantidad, @precio
                 );
-
                 -- 5. Descontar el stock de sus componentes
                 UPDATE s
                 SET s.stoc_cantidad =
                     s.stoc_cantidad - (@cantidad * c.comp_cantidad)
                 FROM STOCK s
-                JOIN Composicion c
-                    ON c.comp_componente = s.stoc_producto
+                JOIN Composicion c ON c.comp_componente = s.stoc_producto
                 WHERE c.comp_producto = @producto
                   AND s.stoc_deposito = '00';
 
@@ -1840,7 +1821,6 @@ BEGIN
 
         ELSE
         BEGIN
-
             -- 6. Si es un producto simple, verificar su stock
             IF EXISTS (
                 SELECT 1
@@ -1850,20 +1830,17 @@ BEGIN
                   AND stoc_cantidad >= @cantidad
             )
             BEGIN
-
                 -- 7. Insertar el producto vendido
                 INSERT INTO Item_Factura
                 VALUES (
                     @tipo, @sucursal, @numero,
                     @producto, @cantidad, @precio
                 );
-
                 -- 8. Descontar su stock
                 UPDATE STOCK
                 SET stoc_cantidad = stoc_cantidad - @cantidad
                 WHERE stoc_producto = @producto
                   AND stoc_deposito = '00';
-
             END;
         END;
 
@@ -1876,7 +1853,7 @@ BEGIN
     CLOSE cursor_ventas;
     DEALLOCATE cursor_ventas;
 END;
-
+GO
 /* 6. Realizar un procedimiento que si en alguna factura se facturaron componentes 
 que conforman un combo determinado (o sea que juntos componen otro 
 producto de mayor nivel), en cuyo caso deberá reemplazar las filas 
@@ -1964,7 +1941,7 @@ BEGIN
         END;
     END;
 END;
-
+GO
 /* 2.  Realizar un stored procedure que reciba un código de producto y una fecha y devuelva la mayor cantidad de
     días consecutivos a partir de esa fecha que el producto tuvo al menos la venta de una unidad en el día, el
     sistema de ventas on line está habilitado 24-7 por lo que se deben evaluar todos los días incluyendo domingos y feriados.*/
@@ -2011,7 +1988,7 @@ BEGIN
 
     SELECT @dias AS dias_consecutivos;
 END;
-
+GO
 
 /* 2do  Recuperatorio Gestión de Datos
 2. El sistema actual permite vender productos compuestos directamente. Sin embargo, 
@@ -2020,8 +1997,7 @@ los productos y cantidades correspondientes al primer nivel de composición.
 Se debe implementar una lógica para que, cada vez que se realice la venta de 
 un producto compuesto, se registren sus componentes del primer nivel en las 
 tablas correspondientes.*/
-CREATE OR ALTER TRIGGER TR_REGISTRAR_COMPONENTES
-ON Item_Factura
+CREATE OR ALTER TRIGGER TR_REGISTRAR_COMPONENTES ON Item_Factura
 INSTEAD OF INSERT
 AS
 BEGIN
@@ -2135,7 +2111,7 @@ BEGIN
     CLOSE cursor_producto;
     DEALLOCATE cursor_producto;
 END;
-
+GO
 /* Parcial 19/11/2022
 1. Implementar una regla de negocio en línea donde nunca una factura
 nueva tenga un precio de producto distinto al que figura en la tabla
@@ -2150,8 +2126,9 @@ CREATE TABLE LOG_PRECIOS
   log_precio_correcto DECIMAL(12,2), 
   log_fecha SMALLDATETIME
 )
-CREATE OR ALTER TRIGGER TR_VALIDAR_PRECIO
-ON Item_Factura
+GO
+
+CREATE OR ALTER TRIGGER TR_VALIDAR_PRECIO ON Item_Factura
 INSTEAD OF INSERT
 AS
 BEGIN
@@ -2194,12 +2171,11 @@ BEGIN
     WHERE i.item_precio = p.prod_precio;
 
 END;
-
+GO
 /* Parcial 1C2018
 2) implementar el/los objetos necesarios para mantener siempre actualizado al instante ante cualquier evento el campo fact_total de la tabla Factura
 Nota: se sabe que actualmente el campo fact_total presenta esta propiedad*/
-CREATE OR ALTER TRIGGER TR_ACTUALIZAR_TOTAL
-ON Item_Factura
+CREATE OR ALTER TRIGGER TR_ACTUALIZAR_TOTAL ON Item_Factura
 AFTER INSERT, UPDATE, DELETE
 AS
 BEGIN
@@ -2226,5 +2202,5 @@ BEGIN
           AND d.item_sucursal = Factura.fact_sucursal
           AND d.item_numero = Factura.fact_numero
     );
-
 END;
+
