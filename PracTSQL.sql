@@ -73,7 +73,7 @@ UPDATE Clientes
                                    WHEN puntos_acumulados >= 50 THEN 2
                                    ELSE 0
                                END;
-
+GO
 /* Guia TSQL
 6. Realizar un procedimiento que si en alguna factura se facturaron componentes 
 que conforman un combo determinado (o sea que juntos componen otro 
@@ -88,7 +88,7 @@ Factura
 Factura                --> INSERTAR
   Item_factura
 	  - 1 Combo Linterna_pila */
-CREATE PROCEDURE pr_composicion 
+CREATE OR ALTER PROCEDURE pr_composicion 
 AS
 BEGIN
 	DECLARE @producto CHAR(8), @tipo CHAR(1), @sucursal CHAR(4), @numero CHAR(8)
@@ -146,7 +146,7 @@ END
 GO
 
 -- Otra versión más completa al ejercicio:
-CREATE PROCEDURE pr_composicion
+CREATE OR ALTER PROCEDURE pr_composicion
 AS
 BEGIN
     DECLARE @producto CHAR(8)
@@ -278,7 +278,7 @@ GO
 -------------
 -- TRIGGER --
 -------------
-CREATE TRIGGER TR_I_FACTURA ON FACTURA 
+CREATE OR ALTER TRIGGER TR_I_FACTURA ON FACTURA 
 AFTER INSERT , DELETE
 AS
 BEGIN TRANSACTION 
@@ -336,6 +336,7 @@ SELECT sum(fact_total) from factura where month(fact_fecha) = month ( getdate() 
 DELETE factura where month(fact_fecha) = month ( getdate() ) and year(fact_fecha) = year(getdate()) 
                                             and fact_vendedor = 1 
                                             AND fact_tipo='C' AND fact_sucursal= '0003' and fact_numero='00000014'
+GO
 --- Fin Pruebas
 
 CREATE TRIGGER TR_DELETED_EN_CASCADA ON CLIENTE
@@ -364,7 +365,7 @@ BEGIN TRANSACTION
     INNER JOIN deleted D
         ON C.clie_codigo = D.clie_codigo;
 COMMIT
-
+GO
 /* Ejercicio de Parcial dado en clase practica
 Implementar una regla de negocio en línea donde NUNCA una factura nueva 
 tenga un precio de producto DISTINTO al que figura en la tabla PRODUCTO.
@@ -374,7 +375,7 @@ producto char(8),
 precio decimal(12,2),
 fecha smalldatetime
 ) -- falta agregar las PK, las FK ...
-
+GO
 CREATE TRIGGER tr_parcial_1 ON item_factura 
 INSTEAD OF INSERT 
 AS
@@ -392,7 +393,7 @@ BEGIN TRANSACTION
         JOIN Producto ON item_producto = prod_codigo
         WHERE item_precio != prod_precio 
 COMMIT
-
+GO
 /* Parcial 08/07/2026 Bases de Datos 1C-2026
 T-SQL
 Implementar el/los objetos necesarios para simular una restricción UNIQUE sobre la columna prod_detalle de la tabla Producto.
@@ -425,7 +426,7 @@ BEGIN
         ROLLBACK
     END
 END
-
+GO
 -- Nota: 8
 -- TSQL
 CREATE OR ALTER PROCEDURE SP_ARREGLAR_REPETIDOS_prod_detalle_Producto (
@@ -464,6 +465,7 @@ BEGIN
 		    DEALLOCATE producto_cursor;
 	    END
 END
+GO
 /*
 EXEC SP_ARREGLAR_REPETIDOS_prod_detalle_Producto @detalle_producto_nuevo='CHAUCHAU'
 select * from Producto where prod_detalle like 'CHAUCH%'
@@ -517,12 +519,12 @@ BEGIN
 	CLOSE prod_detalle_nuevo_cursor;
 	DEALLOCATE prod_detalle_nuevo_cursor;
 END 
+GO
 -- lista todos los prod_detalle existentes actualmente
 -- SELECT P0.prod_detalle FROM Producto P0
 
 -- V3 para el Trigger
-CREATE OR ALTER TRIGGER TR_UNIQUE_PROD_DETALLE
-ON Producto
+CREATE OR ALTER TRIGGER TR_UNIQUE_PROD_DETALLE ON Producto
 INSTEAD OF INSERT, UPDATE
 AS
 BEGIN
@@ -612,7 +614,7 @@ BEGIN
         RETURN
     END
 END
-
+GO
 /*  Parcial Práctico de Gestión de Datos - 12/07/2025
 2. Se agregó recientemente un campo CUIT a la tabla de clientes. Debido a un error, 
 se generaron múltiples registros de clientes con el mismo CUIT.
@@ -690,7 +692,7 @@ CREATE TABLE Item_Factura_Precio ( -- Tabla auxiliar
     precio_unitario DECIMAL(12,2),
     PRIMARY KEY (item_tipo, item_sucursal, item_numero, item_producto)
 );
-
+GO
 CREATE PROCEDURE migrarPrecioHistorico
 AS 
 BEGIN 
@@ -709,10 +711,12 @@ BEGIN
             item_precio
         FROM Item_Factura;
 END
+GO
 EXEC migrarPrecioHistorico
 
 ALTER TABLE Item_Factura
 DROP COLUMN item_precio;
+GO
 
 CREATE VIEW v_item_factura
 AS
@@ -732,6 +736,7 @@ JOIN Item_Factura_Precio ip
    AND ip.item_sucursal = i.item_sucursal
    AND ip.item_numero = i.item_numero
    AND ip.item_producto = i.item_producto;
+GO
 
 CREATE TRIGGER TR_ITEM_FACTURA_PRECIO
 ON Item_Factura
@@ -755,7 +760,7 @@ BEGIN
     JOIN Producto p
         ON p.prod_codigo = i.item_producto;
 END;
-
+GO
 /* Parcial Practico de Gestion de Datos - 28/07/2023
 2. Suponiendo que se aplican los siguientes cambios en el modelo de datos:
     Cambio 1) create table provincia (id int primary key, nombre char(100)) ;
@@ -783,6 +788,7 @@ BEGIN
         RETURN
     END
 END
+GO
 
 CREATE OR ALTER TRIGGER TR_PROVINCIA_NO_DELETE_REFERENCIADA
 ON Provincia
@@ -849,6 +855,7 @@ BEGIN
         SELECT comp_producto FROM deleted
     )
 END
+GO
 -- Si cambia el precio de un componente, hay que recalcular el precio final del prod. compuesto
 CREATE OR ALTER TRIGGER TR_PRODUCTO_PRECIO_COMPONENTE
 ON Producto
@@ -966,7 +973,7 @@ CREATE TABLE Detalle_Compra (
     precio DECIMAL(12,2),
     PRIMARY KEY (comp_codigo, prod_codigo, depo_codigo)
 );
-
+GO
 CREATE OR ALTER PROCEDURE SP_REGISTRAR_COMPRA
     @comp_codigo INT,
     @comp_fecha SMALLDATETIME,
@@ -1029,7 +1036,7 @@ BEGIN
         END
     COMMIT TRANSACTION
 END
-
+GO
 /* Parcial 08/07/2026 Bases de Datos 1C-2026
 T-SQL
 Implementar el/los objetos necesarios para simular una restricción UNIQUE sobre la columna prod_detalle 
@@ -1166,6 +1173,7 @@ ORDER BY c.clie_razon_social ASC,
                     )
                 THEN 0 ELSE 1
             END;
+GO
 -- TSQL
 CREATE OR ALTER TRIGGER TR_ITEM_FACTURA_COMPONER
 ON Item_Factura
@@ -1235,17 +1243,16 @@ COMMIT TRANSACTION
 compraron por encima del promedio de compras (fact_total) de todos
 los clientes del 2012.
 De estos clientes mostrar para el 2012:
-1. El código del cliente
-7. La razón social del cliente
-3. Código de producto que en cantidades más compro.
-A. El nombre del producto del punto 3.
-. Cantidad de productos distintos comprados por el
-cliente.
-.Cantidad de productos con composición comprados
-por el cliente.
+    1. El código del cliente
+    2. La razón social del cliente
+    3. Código de producto que en cantidades más compro.
+    4. El nombre del producto del punto 3.
+    5. Cantidad de productos distintos comprados por el cliente.
+    6. Cantidad de productos con composición comprados por el cliente.
 El resultado deberá ser ordenado poniendo primero aquellos clientes
 que compraron más de entre 5 y 10 productos distintos en el 2012.
 Nota: No se permiten select en el from, es decir, select ... from (select ...) as T,...
+
 2. Implementar una regla de negocio de validación en línea que permita
 validar el STOCK al realizarse una venta. Cada venta se debe
 descontar sobre el depósito 00. En caso de que se venda un producto
@@ -1333,7 +1340,7 @@ ORDER BY
         ELSE 1
     END,
     c.clie_razon_social;
-
+GO
 --TSQL
 CREATE OR ALTER TRIGGER TR_ITEM_FACTURA_VALIDAR_STOCK
 ON Item_Factura
@@ -1428,7 +1435,7 @@ BEGIN TRANSACTION
               AND ISNULL(s2.stoc_cantidad, 0) < i.item_cantidad * c2.comp_cantidad
       )
 COMMIT TRANSACTION
-
+GO
 
 /* Parcial Practico de Gestión de Datos
 19/11/2022
@@ -1552,7 +1559,7 @@ ORDER BY
         THEN 0
         ELSE 1
     END;
-
+GO
 --TSQL
 CREATE TABLE Log_Precio_Item_Factura (
     item_tipo CHAR(1),
@@ -1563,6 +1570,7 @@ CREATE TABLE Log_Precio_Item_Factura (
     precio_correcto DECIMAL(12,2),
     fecha SMALLDATETIME
 );
+GO
 
 CREATE OR ALTER TRIGGER TR_ITEM_FACTURA_PRECIO_PRODUCTO
 ON Item_Factura
@@ -1633,34 +1641,34 @@ GO
 CREATE TRIGGER TR_CLIENTE_FK_PROVINCIA ON Cliente
 AFTER INSERT, UPDATE
 AS
-SET TRANSACTION ISOLATION LEVEL SERIALIZABLE
-BEGIN TRANSACTION
-    IF EXISTS (SELECT 1
-               FROM inserted i
-               WHERE i.pcia_id IS NOT NULL          -- una FK nullable permite NULL
-                 AND NOT EXISTS (SELECT 1 FROM Provincia p WHERE p.id = i.pcia_id))
-    BEGIN
-        RAISERROR('La provincia indicada no existe.', 16, 1)
-        ROLLBACK TRANSACTION
-        RETURN
-    END
-COMMIT TRANSACTION
+    SET TRANSACTION ISOLATION LEVEL SERIALIZABLE
+    BEGIN TRANSACTION
+        IF EXISTS (SELECT 1
+                   FROM inserted i
+                   WHERE i.pcia_id IS NOT NULL          -- una FK nullable permite NULL
+                     AND NOT EXISTS (SELECT 1 FROM Provincia p WHERE p.id = i.pcia_id))
+        BEGIN
+            RAISERROR('La provincia indicada no existe.', 16, 1)
+            ROLLBACK TRANSACTION
+            RETURN
+        END
+    COMMIT TRANSACTION
 GO
 
 -- 2) Lado padre: no se puede borrar una provincia usada por clientes
 CREATE TRIGGER TR_PROVINCIA_DELETE ON Provincia
 AFTER DELETE
 AS
-SET TRANSACTION ISOLATION LEVEL SERIALIZABLE
-BEGIN TRANSACTION
-    IF EXISTS (SELECT 1
-               FROM deleted d
-               JOIN Cliente c ON c.pcia_id = d.id)
-    BEGIN
-        RAISERROR('No se puede borrar: hay clientes con esa provincia.', 16, 1)
-        ROLLBACK TRANSACTION
-        RETURN
-    END
+    SET TRANSACTION ISOLATION LEVEL SERIALIZABLE
+    BEGIN TRANSACTION
+        IF EXISTS (SELECT 1
+                   FROM deleted d
+                   JOIN Cliente c ON c.pcia_id = d.id)
+        BEGIN
+            RAISERROR('No se puede borrar: hay clientes con esa provincia.', 16, 1)
+            ROLLBACK TRANSACTION
+            RETURN
+        END
 COMMIT TRANSACTION
 GO
 
@@ -1669,20 +1677,20 @@ GO
 CREATE TRIGGER TR_PROVINCIA_UPDATE ON Provincia
 AFTER UPDATE
 AS
-SET TRANSACTION ISOLATION LEVEL SERIALIZABLE
-BEGIN TRANSACTION
-    IF EXISTS (SELECT 1 FROM deleted WHERE id NOT IN (SELECT id FROM inserted))
-    BEGIN
-        IF EXISTS (SELECT 1
-                   FROM Cliente
-                   WHERE pcia_id IN (SELECT id FROM deleted)
-                     AND pcia_id NOT IN (SELECT id FROM inserted))
+    SET TRANSACTION ISOLATION LEVEL SERIALIZABLE
+    BEGIN TRANSACTION
+        IF EXISTS (SELECT 1 FROM deleted WHERE id NOT IN (SELECT id FROM inserted))
         BEGIN
-            RAISERROR('No se puede cambiar el id: hay clientes con esa provincia.', 16, 1)
-            ROLLBACK TRANSACTION
-            RETURN
+            IF EXISTS (SELECT 1
+                       FROM Cliente
+                       WHERE pcia_id IN (SELECT id FROM deleted)
+                         AND pcia_id NOT IN (SELECT id FROM inserted))
+            BEGIN
+                RAISERROR('No se puede cambiar el id: hay clientes con esa provincia.', 16, 1)
+                ROLLBACK TRANSACTION
+                RETURN
+            END
         END
-    END
 COMMIT TRANSACTION
 GO
 
