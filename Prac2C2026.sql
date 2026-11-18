@@ -279,6 +279,8 @@ BEGIN TRANSACTION
 PRINT @@TRANCOUNT
 ROLLBACK
 PRINT @@TRANCOUNT
+
+GO
 ---------------
 CREATE TRIGGER [dbo].[TR_INSERT_CLIE] ON [dbo].[Cliente]
 AFTER INSERT
@@ -290,6 +292,7 @@ COMMIT
 insert into cliente (clie_codigo, clie_razon_social, clie_telefono,
  clie_domicilio, clie_limite_credito, clie_vendedor) values ('0---1',' cliente nuevo', 'tel',
 'domicilio', 1000, 1)
+GO
 ---------------
 CREATE TRIGGER [dbo].[tr_delete] ON [dbo].[Cliente]
 AFTER DELETE, INSERT, UPDATE
@@ -304,7 +307,7 @@ insert into cliente (clie_codigo, clie_razon_social, clie_telefono,
 'domicilio', 1000, 1)
 delete from cliente where clie_codigo = '0---1'
 update cliente set clie_razon_social = 'valor razon nueva' where clie_codigo = '00000'
-
+GO
 /* Realizar un trigger que cada vez que se inserte una factura del mes en curso.
 Actualice la comision del vendedor con la sgte formula: 
 suma del monto total de las facturas del mes en curso * 0.1  */
@@ -346,6 +349,7 @@ insert into factura ( fact_cliente, fact_fecha, fact_numero, fact_sucursal,
  fact_tipo , fact_total, fact_total_impuestos ,
  fact_vendedor )
 values('00000', '20261014', '00000000','0000','C', 100, 100, 1 )
+GO
 ---------- 21/10
 /*REALIZAR UN TRIGGER QUE APLIQUE UN DELETE EN CASCADA SOBRE LA TABLA CLIENTE
 "DELETE FROM CLIENTE" */
@@ -362,108 +366,170 @@ BEGIN TRANSACTION
         SELECT d.clie_codigo
         FROM DELETED d)
 COMMIT TRANSACTION
+GO
 -- Soluci{on compañero
-CREATE TRIGGER borrarEnCascada ON Cliente INSTEAD OF DELETE
+CREATE TRIGGER borrarEnCascada ON Cliente 
+INSTEAD OF DELETE
 AS
 BEGIN TRANSACTION
-DECLARE @tipo char(1)
-DECLARE @sucursal char(4)
-DECLARE @numero char(8)
-DECLARE recorrerItemClientePorBorrar CURSOR FOR
-SELECT fact_tipo, fact_sucursal, fact_numero
-FROM Factura
-WHERE fact_cliente IN (SELECT clie_codigo FROM Deleted)
-OPEN recorrerItemClientePorBorrar
-FETCH NEXT FROM recorrerItemClientePorBorrar INTO @tipo, @surcusal, @numero
-WHILE @@FETCH_STATUS = 0
-BEGIN
-DELETE FROM Item_Factura
-WHERE item_tipo = @tipo and
- item_sucursal = @sucursal and
- item_numero = @numero
-FETCH NEXT FROM recorrerItemClientePorBorrar INTO @tipo, @surcusal, @numero
-END
-CLOSE recorrerItemClientePorBorrar
-DEALLOCATE recorrerItemClientePorBorrar
-DELETE FROM Factura
-WHERE fact_cliente IN (SELECT clie_codigo FROM Deleted)
-DELETE FROM Cliente
-WHERE clie_codigo IN (SELECT clie_codigo FROM Deleted)
+    DECLARE @tipo char(1)
+    DECLARE @sucursal char(4)
+    DECLARE @numero char(8)
+    DECLARE recorrerItemClientePorBorrar CURSOR FOR
+    SELECT fact_tipo, fact_sucursal, fact_numero
+    FROM Factura
+    WHERE fact_cliente IN (SELECT clie_codigo FROM Deleted)
+    OPEN recorrerItemClientePorBorrar
+    FETCH NEXT FROM recorrerItemClientePorBorrar INTO @tipo, @surcusal, @numero
+    WHILE @@FETCH_STATUS = 0
+        BEGIN
+        DELETE FROM Item_Factura
+        WHERE item_tipo = @tipo and
+         item_sucursal = @sucursal and
+         item_numero = @numero
+        FETCH NEXT FROM recorrerItemClientePorBorrar INTO @tipo, @surcusal, @numero
+        END
+    CLOSE recorrerItemClientePorBorrar
+    DEALLOCATE recorrerItemClientePorBorrar
+    DELETE FROM Factura
+    WHERE fact_cliente IN (SELECT clie_codigo FROM Deleted)
+    DELETE FROM Cliente
+    WHERE clie_codigo IN (SELECT clie_codigo FROM Deleted)
 COMMIT
-
+GO
 --Solución Profe
 CREATE TRIGGER [dbo].[TR_DELETED_EN_CASCADA] ON [dbo].[Cliente]
 INSTEAD OF DELETE
 AS
 BEGIN TRANSACTION
--- Eliminar los item_factura del cliente
-DELETE IFact
-FROM Item_Factura IFact
-INNER JOIN Factura F
-ON IFact.item_tipo = F.fact_tipo
-AND IFact.item_sucursal = F.fact_sucursal
-AND IFact.item_numero = F.fact_numero
-INNER JOIN deleted D
-ON F.fact_cliente = D.clie_codigo;
--- Eliminar las facturas del cliente
-DELETE F
-FROM Factura F
-INNER JOIN deleted D
-ON F.fact_cliente = D.clie_codigo;
--- Eliminar el cliente
-DELETE C
-FROM Cliente C
-INNER JOIN deleted D
-ON C.clie_codigo = D.clie_codigo;
+    -- Eliminar los item_factura del cliente
+    DELETE IFact
+    FROM Item_Factura IFact
+    INNER JOIN Factura F ON IFact.item_tipo = F.fact_tipo AND IFact.item_sucursal = F.fact_sucursal AND IFact.item_numero = F.fact_numero
+    INNER JOIN deleted D ON F.fact_cliente = D.clie_codigo;
+    -- Eliminar las facturas del cliente
+    DELETE F
+    FROM Factura F
+    INNER JOIN deleted D ON F.fact_cliente = D.clie_codigo;
+    -- Eliminar el cliente
+    DELETE C
+    FROM Cliente C
+    INNER JOIN deleted D ON C.clie_codigo = D.clie_codigo;
 COMMIT
-
+GO
 /* 18. Sabiendo que el limite de credito de un cliente es el monto maximo que se le puede facturar mensualmente, 
 cree el/los objetos de base de datos necesarios para que dicha regla de negocio se cumpla automaticamente. 
 No se conoce la forma de acceso a los datos ni el procedimiento por el cual se emiten las facturas */
 CREATE TRIGGER TR_EJE_18 ON factura 
-AFTER insert, UPDATE
+AFTER INSERT, UPDATE
 AS
 BEGIN TRANSACTION 
-
-    IF EXISTS ( SELECT 1 FROM inserted f join cliente c on 
-                    fact_cliente = clie_codigo 
-                WHERE 
-                    year(fact_fecha) = year(getdate()) and 
-                    month(fact_fecha) = month( getdate())
-                GROUP BY 
-                    fact_cliente, clie_limite_credito
-                HAVING 
-                     sum(fact_total) > clie_limite_credito 
+    IF EXISTS ( SELECT 1 
+                FROM inserted f 
+                JOIN cliente c ON fact_cliente = clie_codigo 
+                WHERE year(fact_fecha) = year(getdate()) 
+                    and month(fact_fecha) = month( getdate())
+                GROUP BY fact_cliente, clie_limite_credito
+                HAVING sum(fact_total) > ISNULL(clie_limite_credito,0) 
                )
     BEGIN 
-
-            ROLLBACK 
-            RETURN 
-
+        ROLLBACK 
+        RETURN 
     END 
 
 COMMIT
+GO
 --
 CREATE TRIGGER TR_EJE_18_c ON CLIENTE 
 AFTER UPDATE
 AS
 BEGIN TRANSACTION 
-
-    IF EXISTS ( SELECT 1 FROM FACTURA f join inserted i on
-                    fact_cliente = clie_codigo 
-                WHERE 
-                    year(fact_fecha) = year(getdate()) and 
-                    month(fact_fecha) = month( getdate())
-                GROUP BY 
-                    fact_cliente, clie_limite_credito
-                HAVING 
-                     sum(fact_total) > clie_limite_credito 
+    IF EXISTS ( SELECT 1 
+                FROM FACTURA f 
+                JOIN inserted i ON f.fact_cliente = i.clie_codigo 
+                WHERE year(f.fact_fecha) = year(getdate()) 
+                    and month(f.fact_fecha) = month( getdate())
+                GROUP BY fact_cliente, clie_limite_credito
+                HAVING sum(fact_total) > ISNULL(clie_limite_credito,0) 
                )
     BEGIN 
-
-            ROLLBACK 
-            RETURN 
-
+        ROLLBACK 
+        RETURN 
     END 
-
 COMMIT
+GO
+--- Otra opcion
+CREATE OR ALTER TRIGGER tr_validar_limite_credito_mensual
+ON Factura
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    -- Establecemos el máximo nivel de aislamiento para evitar que dos facturas
+    -- simultáneas del mismo cliente se validen al mismo tiempo y superen el límite.
+    SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+    -- Verificamos si algún cliente afectado en el lote supera su límite en algún mes/año
+    IF EXISTS (
+        SELECT 1
+        FROM Factura f
+        JOIN Cliente c ON c.clie_codigo = f.fact_cliente
+        WHERE EXISTS (
+            -- Filtramos solo los clientes y períodos (Año/Mes) que entraron en inserted
+            SELECT 1
+            FROM inserted ins
+            WHERE ins.fact_cliente = f.fact_cliente
+              AND YEAR(ins.fact_fecha) = YEAR(f.fact_fecha)
+              AND MONTH(ins.fact_fecha) = MONTH(f.fact_fecha)
+        )
+        GROUP BY f.fact_cliente, YEAR(f.fact_fecha), MONTH(f.fact_fecha), c.clie_limite_credito
+        -- Como es un trigger AFTER, los montos de inserted YA están sumados en Factura
+        HAVING SUM(f.fact_total) > c.clie_limite_credito
+    )
+    BEGIN
+        RAISERROR('Operacion cancelada: El cliente supera su limite de credito mensual.', 16, 1);
+        ROLLBACK TRANSACTION;
+        RETURN;
+    END
+END;
+GO
+--Version final
+-- Supuesto: se controla el mes de cada factura nueva o modificada (no solo el mes actual).
+CREATE OR ALTER TRIGGER TR_LIMITE_CREDITO_FACTURA ON Factura
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    IF EXISTS (SELECT 1
+               FROM inserted i
+               JOIN Cliente c ON c.clie_codigo = i.fact_cliente
+               WHERE (SELECT SUM(f.fact_total)
+                      FROM Factura f
+                      WHERE f.fact_cliente = i.fact_cliente
+                        AND YEAR(f.fact_fecha)  = YEAR(i.fact_fecha)
+                        AND MONTH(f.fact_fecha) = MONTH(i.fact_fecha)) > c.clie_limite_credito)
+    BEGIN
+        RAISERROR('La facturación mensual supera el límite de crédito del cliente.', 16, 1)
+        ROLLBACK TRANSACTION
+        RETURN
+    END
+END
+GO
+
+-- Si bajan el límite, no puede quedar por debajo de lo ya facturado en algún mes.
+CREATE OR ALTER TRIGGER TR_LIMITE_CREDITO_CLIENTE ON Cliente
+AFTER UPDATE
+AS
+BEGIN
+    IF UPDATE(clie_limite_credito)
+       AND EXISTS (SELECT 1
+                   FROM inserted i
+                   JOIN Factura f ON f.fact_cliente = i.clie_codigo
+                   GROUP BY i.clie_codigo, i.clie_limite_credito, YEAR(f.fact_fecha), MONTH(f.fact_fecha)
+                   HAVING SUM(f.fact_total) > i.clie_limite_credito)
+    BEGIN
+        RAISERROR('El nuevo límite es menor a lo facturado en algún mes.', 16, 1)
+        ROLLBACK TRANSACTION
+        RETURN
+    END
+END
+GO
+-- Fin ej 18
