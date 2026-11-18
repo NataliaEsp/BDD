@@ -91,11 +91,8 @@ SELECT
     p.prod_detalle,
     ISNULL(SUM(i.item_cantidad), 0) AS Cantidad_Total_Vendida
 FROM Producto p
-LEFT JOIN Item_Factura i 
-    ON p.prod_codigo = i.item_producto
-GROUP BY 
-    p.prod_codigo, 
-    p.prod_detalle
+LEFT JOIN Item_Factura i ON p.prod_codigo = i.item_producto
+GROUP BY p.prod_codigo, p.prod_detalle
 
 /* Mostrar por cliente: código de cliente y monto total comprado en 2012.*/
 SELECT 
@@ -105,6 +102,7 @@ FROM Cliente c
 JOIN Factura f ON c.clie_codigo = f.fact_cliente
 WHERE YEAR(f.fact_fecha) = 2012
 GROUP BY c.clie_codigo
+ORDER BY SUM(f.fact_total) DESC
 
 /* Mostrar por rubro: código de rubro, detalle y cantidad de productos que pertenecen a ese rubro.*/
 SELECT 
@@ -150,9 +148,7 @@ SELECT
     f.fact_cliente AS Cod_Cliente,
     COUNT(DISTINCT i.item_producto) AS Cant_Prod_Distintos
 FROM Factura f
-JOIN Item_Factura i ON f.fact_tipo = i.item_tipo
-AND f.fact_sucursal = i.item_sucursal
-AND f.fact_numero = i.item_numero
+JOIN Item_Factura i ON f.fact_tipo = i.item_tipo AND f.fact_sucursal = i.item_sucursal AND f.fact_numero = i.item_numero
 WHERE YEAR(f.fact_fecha) = 2012
 GROUP BY f.fact_cliente
 
@@ -162,9 +158,7 @@ SELECT
     COUNT(DISTINCT f.fact_cliente) AS Cant_Clientes
 FROM Producto p
 JOIN Item_Factura i ON p.prod_codigo = i.item_producto
-JOIN Factura f ON i.item_tipo = f.fact_tipo AND 
-                  i.item_sucursal = f.fact_sucursal AND
-                  i.item_numero = f.fact_numero
+JOIN Factura f ON i.item_tipo = f.fact_tipo AND i.item_sucursal = f.fact_sucursal AND i.item_numero = f.fact_numero
 WHERE YEAR(f.fact_fecha) = 2012
 GROUP BY p.prod_codigo
 -- tambien puedo hacerlo por item_producto directamente si solo quiero el codigo del producto
@@ -172,9 +166,7 @@ SELECT
     i.item_producto AS Cod_Prod,
     COUNT(DISTINCT f.fact_cliente) AS Cant_Clientes
 FROM Item_Factura i 
-JOIN Factura f ON i.item_tipo = f.fact_tipo AND 
-                  i.item_sucursal = f.fact_sucursal AND
-                  i.item_numero = f.fact_numero
+JOIN Factura f ON i.item_tipo = f.fact_tipo AND i.item_sucursal = f.fact_sucursal AND i.item_numero = f.fact_numero
 WHERE YEAR(f.fact_fecha) = 2012
 GROUP BY i.item_producto
 
@@ -208,13 +200,11 @@ SELECT
     cl.clie_codigo AS Cod_Cliente
 FROM Cliente cl
 JOIN Factura f ON cl.clie_codigo = f.fact_cliente
-JOIN Item_Factura i ON f.fact_tipo = i.item_tipo
-    AND f.fact_sucursal = i.item_sucursal
-    AND f.fact_numero = i.item_numero
+JOIN Item_Factura i ON f.fact_tipo = i.item_tipo AND f.fact_sucursal = i.item_sucursal AND f.fact_numero = i.item_numero
 WHERE i.item_producto IN (
-    SELECT 
-        c.comp_producto
-    FROM Composicion c)
+        SELECT 
+            c.comp_producto
+        FROM Composicion c)
     AND YEAR(f.fact_fecha) = 2012
 GROUP BY clie_codigo -- PARA NO MOSTRAR REPETIDOS CLIENTES
 
@@ -224,34 +214,23 @@ SELECT
     c.clie_razon_social AS Cliente,
     COUNT(DISTINCT i.item_producto) AS Cant_Productos_Compuestos
 FROM Cliente c
-JOIN Factura f
-    ON c.clie_codigo = f.fact_cliente
-JOIN Item_Factura i
-    ON f.fact_tipo = i.item_tipo
-   AND f.fact_sucursal = i.item_sucursal
-   AND f.fact_numero = i.item_numero
+JOIN Factura f ON c.clie_codigo = f.fact_cliente
+JOIN Item_Factura i ON f.fact_tipo = i.item_tipo AND f.fact_sucursal = i.item_sucursal AND f.fact_numero = i.item_numero
 WHERE i.item_producto IN (
         SELECT comp_producto
         FROM Composicion )
     AND YEAR(f.fact_fecha) = 2012
-GROUP BY
-    c.clie_codigo,
-    c.clie_razon_social
+GROUP BY c.clie_codigo, c.clie_razon_social
 HAVING COUNT(DISTINCT i.item_producto) > 5
    AND NOT EXISTS (
         SELECT 1
         FROM Factura f2
-        JOIN Item_Factura i2
-            ON f2.fact_tipo = i2.item_tipo
-           AND f2.fact_sucursal = i2.item_sucursal
-           AND f2.fact_numero = i2.item_numero
-        WHERE f2.fact_cliente = c.clie_codigo
-          AND YEAR(f2.fact_fecha) = 2012
+        JOIN Item_Factura i2 ON f2.fact_tipo = i2.item_tipo AND f2.fact_sucursal = i2.item_sucursal AND f2.fact_numero = i2.item_numero
+        WHERE f2.fact_cliente = c.clie_codigo AND YEAR(f2.fact_fecha) = 2012
           AND i2.item_producto NOT IN (
                 SELECT comp_producto
                 FROM Composicion ) 
                 )
-
 /* Mostrar por cliente: código, razón social y monto total comprado en 2012, usando una subconsulta en el SELECT.*/
 -- Opcion A: Devuelve TODOS los clientes tengan factura o no
 SELECT
@@ -293,22 +272,18 @@ SELECT
     c.clie_razon_social AS Raz_Soc_Cliente,
     ISNULL(SUM(f.fact_total), 0) AS Monto_2012 -- El ISNULL es importante para clientes que no tienen facturas
 FROM Cliente c
-LEFT JOIN Factura f 
-    ON c.clie_codigo = f.fact_cliente
-   AND YEAR(f.fact_fecha) = 2012 -- Se pone el filtro de YEAR() = 2012 porque sino te devuelve lo mismo que Opcion C
-GROUP BY 
-    c.clie_codigo, 
-    c.clie_razon_social
+LEFT JOIN Factura f ON c.clie_codigo = f.fact_cliente AND YEAR(f.fact_fecha) = 2012 -- Se pone el filtro de YEAR() = 2012 porque sino te devuelve lo mismo que Opcion C
+GROUP BY c.clie_codigo, c.clie_razon_social
 
 /* Mostrar por producto: código, detalle y cantidad total vendida, usando subconsulta en el SELECT.*/
-    SELECT 
-        p.prod_codigo AS Cod_Prod,
-        p.prod_detalle AS Det_Prod,
-        ISNULL((SELECT
+SELECT 
+    p.prod_codigo AS Cod_Prod,
+    p.prod_detalle AS Det_Prod,
+    ISNULL((SELECT
             SUM(i.item_cantidad)
          FROM Item_Factura i
          WHERE p.prod_codigo = i.item_producto), 0) AS Cant_Total_Vendido
-    FROM Producto p
+FROM Producto p
 
 /* Mostrar ranking de productos más vendidos, con número de fila, código, detalle y cantidad vendida.*/
 SELECT
@@ -467,8 +442,14 @@ FROM Producto p
 JOIN Composicion c ON p.prod_codigo = c.comp_producto
 JOIN Producto pc ON pc.prod_codigo = c.comp_componente
 GROUP BY p.prod_detalle, p.prod_precio
-HAVING COUNT(DISTINCT c.comp_componente) > 2
+HAVING COUNT(DISTINCT c.comp_componente) > 1 -- 2
 ORDER BY COUNT(DISTINCT c.comp_componente) DESC
+--Chusmeo la tabla
+SELECT *
+FROM Producto p
+JOIN Composicion c ON p.prod_codigo = c.comp_producto
+JOIN Producto pc ON pc.prod_codigo = c.comp_componente
+GROUP BY p.prod_detalle, p.prod_precio
 
 /* 12. Mostrar nombre de producto, cantidad de clientes distintos que lo compraron, importe 
 promedio pagado por el producto, cantidad de depósitos en los cuales hay stock del producto 
@@ -513,15 +494,10 @@ SELECT
     p2.prod_detalle AS DETALLE2,
     COUNT(*) AS VECES
 FROM Item_Factura i1
-JOIN Item_Factura i2
-    ON i1.item_tipo = i2.item_tipo
-   AND i1.item_sucursal = i2.item_sucursal
-   AND i1.item_numero = i2.item_numero
+JOIN Item_Factura i2 ON i1.item_tipo = i2.item_tipo AND i1.item_sucursal = i2.item_sucursal AND i1.item_numero = i2.item_numero
    AND i1.item_producto < i2.item_producto -- Para que no se repitan pares (PROD_A-PROD_B = PROD_B-PROD_A)
-JOIN Producto p1
-    ON p1.prod_codigo = i1.item_producto
-JOIN Producto p2
-    ON p2.prod_codigo = i2.item_producto
+JOIN Producto p1 ON p1.prod_codigo = i1.item_producto
+JOIN Producto p2 ON p2.prod_codigo = i2.item_producto
 GROUP BY p1.prod_codigo, p1.prod_detalle,
          p2.prod_codigo, p2.prod_detalle
 HAVING COUNT(*) > 500
@@ -604,7 +580,6 @@ SELECT
 FROM Factura f
 GROUP BY YEAR(f.fact_fecha)
 ORDER BY YEAR(f.fact_fecha)
-
 /* 34. Escriba una consulta sql que retorne para todos los rubros: 
 la cantidad de facturas mal facturadas por cada mes del año 2011
 Se considera que una factura es incorrecta cuando en la misma factura se facturan productos de dos rubros diferentes.  
@@ -668,7 +643,6 @@ WHERE YEAR(f.fact_fecha) = 2012
 GROUP BY j.empl_codigo, j.empl_nombre
 HAVING COUNT(DISTINCT f.fact_tipo + f.fact_sucursal + f.fact_numero) > 10
 ORDER BY SUM(f.fact_total) DESC
-
 
 /* Parcial Práctico de Gestión de Datos - 12/07/2025
 1. El objetivo es realizar una consulta SQL que identifique a los productos que fueron comprados 
